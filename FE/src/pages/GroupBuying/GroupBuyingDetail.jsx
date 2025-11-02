@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, Package, MessageCircle, Users, Clock } from 'lucide-react';
-import { ingredients } from '../data/ingredients';
+import { ingredients } from '../../data/ingredients';
 
 const GroupBuyingDetail = () => {
   const { id } = useParams();
@@ -34,7 +34,6 @@ const GroupBuyingDetail = () => {
         {/* Product Info */}
         <div className="rounded-xl border border-gray-200 bg-white p-6">
           <div className="mb-4 flex gap-4">
-            <div className="text-6xl">{item.image}</div>
             <div className="flex-1">
               <div className="mb-2 flex items-start justify-between">
                 <h3 className="text-xl font-bold text-gray-800">{item.title}</h3>
@@ -97,13 +96,6 @@ const GroupBuyingDetail = () => {
 
           <div className="space-y-3 border-t border-gray-200 pt-4">
             <div className="flex items-start gap-3">
-              <Package size={20} className="mt-0.5 text-gray-400" />
-              <div>
-                <div className="mb-1 text-sm font-medium text-gray-700">수령 일시</div>
-                <div className="text-sm text-gray-600">{item.pickupDate}</div>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
               <MapPin size={20} className="mt-0.5 text-gray-400" />
               <div>
                 <div className="mb-1 text-sm font-medium text-gray-700">수령 장소</div>
@@ -125,7 +117,6 @@ const GroupBuyingDetail = () => {
                 <div className="font-medium text-gray-800">{item.host}</div>
                 <div className="text-xs text-[#5f0080]">주최자</div>
               </div>
-              <span className="text-xs text-gray-500">10:20 참여</span>
             </div>
             <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-400 font-bold text-white">
@@ -135,7 +126,6 @@ const GroupBuyingDetail = () => {
                 <div className="font-medium text-gray-800">이OO</div>
                 <div className="text-xs text-gray-500">참여자</div>
               </div>
-              <span className="text-xs text-gray-500">10:25 참여</span>
             </div>
             <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-400 font-bold text-white">
@@ -145,7 +135,6 @@ const GroupBuyingDetail = () => {
                 <div className="font-medium text-gray-800">박OO</div>
                 <div className="text-xs text-gray-500">참여자</div>
               </div>
-              <span className="text-xs text-gray-500">10:27 참여</span>
             </div>
           </div>
         </div>

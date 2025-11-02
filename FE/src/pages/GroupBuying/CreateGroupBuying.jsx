@@ -80,20 +80,29 @@ const CreateGroupBuying = () => {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">수령 일시</label>
-            <input
-              type="datetime-local"
-              className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:ring-2 focus:ring-[#5f0080] focus:outline-none"
-            />
-          </div>
-
-          <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">수령 장소</label>
             <input
               type="text"
               placeholder="예: 율량동 농협 앞"
               className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:ring-2 focus:ring-[#5f0080] focus:outline-none"
             />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              모집 반경
+              <span className="ml-1 text-xs font-normal text-gray-500">(수령 장소 기준)</span>
+            </label>
+            <select className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:ring-2 focus:ring-[#5f0080] focus:outline-none">
+              <option value="1">1km 이내</option>
+              <option value="5" selected>
+                5km 이내
+              </option>
+              <option value="10">10km 이내</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              설정한 반경 내의 사용자만 공동구매에 참여할 수 있습니다
+            </p>
           </div>
 
           <div>

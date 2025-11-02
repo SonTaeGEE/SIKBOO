@@ -1,12 +1,12 @@
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { MainLayout } from '@/components/Layout';
-import Ingredients from '@/pages/Ingredients';
-import Recipes from '@/pages/Recipes';
-import GroupBuying from '@/pages/GroupBuying';
-import GroupBuyingDetail from '@/pages/GroupBuyingDetail';
-import GroupBuyingChat from '@/pages/GroupBuyingChat';
-import CreateGroupBuying from '@/pages/CreateGroupBuying';
-import MyPage from '@/pages/MyPage';
+import Ingredients from '@/pages/Ingredient/Ingredients';
+import Recipes from '@/pages/Recipe/Recipes';
+import GroupBuying from '@/pages/GroupBuying/GroupBuying';
+import GroupBuyingDetail from '@/pages/GroupBuying/GroupBuyingDetail';
+import GroupBuyingChat from '@/pages/GroupBuying/GroupBuyingChat';
+import CreateGroupBuying from '@/pages/GroupBuying/CreateGroupBuying';
+import MyPage from '@/pages/MyPage/MyPage';
 
 const AppRoutes = () => {
   const location = useLocation();

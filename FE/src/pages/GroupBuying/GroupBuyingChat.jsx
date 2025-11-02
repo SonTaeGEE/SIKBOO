@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Send } from 'lucide-react';
-import { ingredients, chatMessages as initialMessages } from '../data/ingredients';
+import { ingredients, chatMessages as initialMessages } from '../../data/ingredients';
 
 const GroupBuyingChat = () => {
   const { id } = useParams();
