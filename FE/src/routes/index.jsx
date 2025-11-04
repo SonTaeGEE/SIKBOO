@@ -7,9 +7,14 @@ import GroupBuyingDetail from '@/pages/GroupBuying/GroupBuyingDetail';
 import GroupBuyingChat from '@/pages/GroupBuying/GroupBuyingChat';
 import CreateGroupBuying from '@/pages/GroupBuying/CreateGroupBuying';
 import MyPage from '@/pages/MyPage/MyPage';
+import Login from '@/pages/Auth/Login';
+import Signup from '@/pages/Auth/Signup';
 
 const AppRoutes = () => {
   const location = useLocation();
+
+  // 인증 페이지 여부 확인
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
 
   // 페이지별 헤더 설정
   const getHeaderConfig = () => {
@@ -42,6 +47,16 @@ const AppRoutes = () => {
 
   const headerConfig = getHeaderConfig();
 
+  // 인증 페이지는 레이아웃 없이 렌더링
+  if (isAuthPage) {
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+      </Routes>
+    );
+  }
+
   return (
     <MainLayout
       headerTitle={headerConfig.title}
@@ -49,7 +64,7 @@ const AppRoutes = () => {
       hideNavbar={headerConfig.hideNav}
     >
       <Routes>
-        <Route path="/" element={<Navigate to="/group-buying" replace />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/ingredients" element={<Ingredients />} />
         <Route path="/recipes" element={<Recipes />} />
         <Route path="/group-buying" element={<GroupBuying />} />
