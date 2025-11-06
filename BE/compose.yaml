@@ -10,6 +10,7 @@ services:
       - '5432:5432'
     volumes:
       - sikboo-data:/var/lib/postgresql
+      - ./initdb:/docker-entrypoint-initdb.d
     networks:
       - sikboo-network
     healthcheck:
