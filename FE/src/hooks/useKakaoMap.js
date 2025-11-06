@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { loadKakaoMapScript } from '../lib/kakaoMapLoader';
+import { loadKakaoMapScript } from '@/lib/kakaoMapLoader';
 
 /**
  * Kakao Map을 사용하기 위한 커스텀 훅
