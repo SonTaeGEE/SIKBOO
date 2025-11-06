@@ -1,12 +1,12 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Package, BookOpen, ShoppingCart, User, ChevronLeft } from 'lucide-react';
+import { House, BookOpen, ShoppingCart, User, ChevronLeft } from 'lucide-react';
 
 const MainLayout = ({ children, headerTitle, showBackButton = false, hideNavbar = false }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
   const navItems = [
-    { id: 'ingredients', icon: Package, label: '내재료', path: '/ingredients' },
+    { id: 'ingredients', icon: House, label: '내재료', path: '/ingredients' },
     { id: 'recipes', icon: BookOpen, label: '레시피', path: '/recipes' },
     { id: 'group-buying', icon: ShoppingCart, label: '공동구매', path: '/group-buying' },
     { id: 'mypage', icon: User, label: '마이페이지', path: '/mypage' },

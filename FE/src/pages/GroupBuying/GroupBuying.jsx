@@ -1,25 +1,76 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Users, Clock, Plus, Search, ShoppingBag } from 'lucide-react';
 import { ingredients as initialItems, categories } from '../../data/ingredients';
 import { getTimeRemaining } from '../../lib/dateUtils';
+import { useKakaoMap } from '@/hooks/useKakaoMap';
 
 const GroupBuying = () => {
   const navigate = useNavigate();
-  const [location] = useState('청주시 흥덕구 율량동');
+  const { isLoaded } = useKakaoMap();
+  const [location, setLocation] = useState('위치를 가져오는 중...');
   const [searchQuery, setSearchQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [activeTab, setActiveTab] = useState('recruiting'); // 'recruiting' or 'joined'
+  const [distanceFilter, setDistanceFilter] = useState('3'); // '1', '3', '5', '10'
 
   // TODO: 실제로는 서버에서 가져와야 함
   const myJoinedItemIds = [1, 3]; // 예시: 내가 참여한 공동구매 ID들
+
+  // 현재 위치 가져오기
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const getCurrentLocation = () => {
+      if (!navigator.geolocation) {
+        setLocation('위치 정보를 사용할 수 없습니다');
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          // 카카오맵 geocoder로 주소 변환
+          const geocoder = new window.kakao.maps.services.Geocoder();
+          geocoder.coord2Address(lng, lat, (result, status) => {
+            if (status === window.kakao.maps.services.Status.OK) {
+              const address = result[0].address;
+              // 시/구/동 형식으로 표시
+              const displayAddress = `${address.region_1depth_name} ${address.region_2depth_name} ${address.region_3depth_name}`;
+              setLocation(displayAddress);
+            } else {
+              setLocation('주소를 가져올 수 없습니다');
+            }
+          });
+        },
+        (error) => {
+          console.error('위치 가져오기 실패:', error);
+          setLocation('위치 정보를 가져올 수 없습니다');
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0,
+        },
+      );
+    };
+
+    getCurrentLocation();
+  }, [isLoaded]);
 
   const filteredItems = initialItems.filter((item) => {
     const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = category === 'all' || item.category === category;
     const matchesTab =
       activeTab === 'recruiting' ? item.status === 'recruiting' : myJoinedItemIds.includes(item.id);
-    return matchesSearch && matchesCategory && matchesTab;
+
+    // TODO: 실제로는 item.distance 같은 필드가 있어야 함
+    // 지금은 임시로 모든 아이템이 필터를 통과하도록 함
+    const matchesDistance = distanceFilter === 'all' || true;
+
+    return matchesSearch && matchesCategory && matchesTab && matchesDistance;
   });
 
   return (
@@ -101,6 +152,33 @@ const GroupBuying = () => {
                 <span className="text-sm">{cat.name}</span>
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Distance Filter */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-[#666666]">거리:</span>
+            <div className="flex gap-2">
+              {[
+                { id: '1', label: '1km' },
+                { id: '3', label: '3km' },
+                { id: '5', label: '5km' },
+                { id: '10', label: '10km' },
+              ].map((filter) => (
+                <button
+                  key={filter.id}
+                  onClick={() => setDistanceFilter(filter.id)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    distanceFilter === filter.id
+                      ? 'bg-[#5f0080] text-white'
+                      : 'bg-gray-100 text-[#666666] hover:bg-gray-200'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
