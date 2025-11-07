@@ -35,7 +35,7 @@ public class SecurityConfig {
   private final CustomOAuth2UserService customOAuth2UserService;
   private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
 
-  @Value("${app.frontend-url:http://localhost:5173}")
+  @Value("${app.frontend-url:}")
   private String FRONTEND_URL;
 
   @Value("${app.cors.allowed-origins:}")
@@ -135,7 +135,8 @@ public class SecurityConfig {
     } else {
       origins = List.of(FRONTEND_URL);
     }
-    cfg.setAllowedOriginPatterns(origins);
+    cfg.setAllowedOrigins(origins);
+
     cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","PATCH","OPTIONS"));
     cfg.setAllowedHeaders(List.of("*"));
     cfg.setAllowCredentials(true);

@@ -9,10 +9,16 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Entity 
 @Table(name = "member")
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Data
 public class Member {
   @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -20,11 +26,6 @@ public class Member {
   private Long id;
 
   private String name;
-
-  @Column(unique = true)
-  private String email;
-
-  private String password;        // 소셜만 쓸 땐 빈 값 가능(길이 제한은 스키마가 가짐)
 
   private String disease;
   private String allergy;

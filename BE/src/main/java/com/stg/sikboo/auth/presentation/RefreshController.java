@@ -13,7 +13,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 public class RefreshController {
 
   private final JwtDecoder jwtDecoder;       // secret-key 기반 자동 구성

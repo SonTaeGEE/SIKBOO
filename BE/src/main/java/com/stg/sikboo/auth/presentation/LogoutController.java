@@ -4,9 +4,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.stg.sikboo.auth.domain.RefreshTokenRepository;
@@ -15,12 +16,13 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequiredArgsConstructor
+@RequestMapping("/api/auth")
 public class LogoutController {
 
   private final JwtDecoder jwtDecoder;
   private final RefreshTokenRepository refreshTokenRepository;
 
-  @PostMapping("/auth/logout")
+  @PostMapping("/logout")
   public ResponseEntity<Void> logout(@CookieValue(value = "REFRESH", required = false) String refresh) {
     if (refresh != null) {
       try {
