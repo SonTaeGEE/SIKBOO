@@ -24,7 +24,7 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
 
   @Override
   public OAuth2User loadUser(OAuth2UserRequest req) throws OAuth2AuthenticationException {
-    var delegate = new DefaultOAuth2UserService();
+    var delegate   = new DefaultOAuth2UserService();
     var oauth2User = delegate.loadUser(req);
 
     String provider = req.getClientRegistration().getRegistrationId(); // google/kakao/naver
@@ -32,27 +32,25 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
 
     Profile p = Profile.from(provider, attributes);
 
-    // 1) 기본: provider + providerId 로 조회
+    // (provider, providerId) 로만 식별
     Member m = memberRepository.findByProviderAndProviderId(p.provider, p.providerId)
-        // 2) 같은 이메일로 기존 로컬/다른 소셜 계정이 있는 경우 연결 (email이 있을 때만)
-        .orElseGet(() -> p.email != null ? memberRepository.findByEmail(p.email).orElse(null) : null);
+        .orElseGet(() -> {
+          Member created = new Member();
+          created.setRole("USER");
+          created.setProvider(p.provider.toUpperCase());
+          created.setProviderId(p.providerId);
+          // name 이 비어있으면 안전값
+          created.setName(p.name != null ? p.name : p.provider + "_" + p.providerId);
+          // 프로필 이미지 필드가 있으면 주입
+          // if (p.image != null) created.setProfileImage(p.image);
+          return created;
+        });
 
-    if (m == null) {
-      m = new Member();
-      m.setRole("USER");
-      m.setProvider(p.provider.toUpperCase());
-      m.setProviderId(p.providerId);
-      if (p.email != null) m.setEmail(p.email);
-      if (p.name  != null) m.setName(p.name);
-      // 이미지 필드가 있으면: if (p.image != null) m.setProfileImage(p.image);
-    } else {
-      m.setProvider(p.provider.toUpperCase());
-      m.setProviderId(p.providerId);
-      if (p.email != null && (m.getEmail() == null || !p.email.equals(m.getEmail()))) {
-        m.setEmail(p.email);
-      }
-      if (p.name != null) m.setName(p.name);
+    // 이름/이미지 갱신(선택)
+    if (p.name != null && !p.name.equals(m.getName())) {
+      m.setName(p.name);
     }
+    // if (p.image != null) m.setProfileImage(p.image);
 
     memberRepository.save(m);
 
@@ -65,7 +63,7 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
 
   // ----- helpers -----
   static class Profile {
-    String provider, providerId, email, name, image;
+    String provider, providerId, name, image;
 
     @SuppressWarnings("unchecked")
     static Profile from(String provider, Map<String, Object> a) {
@@ -75,7 +73,6 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
       switch (provider) {
         case "google" -> {
           p.providerId = str(a.get("sub"));
-          p.email      = str(a.get("email"));
           p.name       = str(a.get("name"));
           p.image      = str(a.get("picture"));
         }
@@ -84,15 +81,13 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
           Map<String, Object> account = map(a.get("kakao_account"));
           Map<String, Object> prof    = account != null ? map(account.get("profile")) : null;
 
-          // 이메일은 scope 미요청/미동의 시 null일 수 있음
-          p.email = account != null ? str(account.get("email")) : null;
+          // 이메일을 더이상 사용하지 않음
           p.name  = prof != null ? str(prof.get("nickname")) : null;
           p.image = prof != null ? str(prof.get("profile_image_url")) : null;
         }
         case "naver" -> {
           Map<String, Object> r = map(a.get("response"));
           p.providerId = str(r.get("id"));
-          p.email      = str(r.get("email"));
           p.name       = str(r.get("name"));
           p.image      = str(r.get("profile_image"));
         }
