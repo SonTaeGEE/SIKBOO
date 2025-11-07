@@ -1,11 +1,9 @@
 package com.stg.sikboo.security;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
-
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -16,12 +14,17 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @Configuration
@@ -30,34 +33,63 @@ import lombok.RequiredArgsConstructor;
 public class SecurityConfig {
 
   private final CustomOAuth2UserService customOAuth2UserService;
-  private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler; // ★ 유지
+  private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
 
-  @Value("${app.frontend-url:http://localhost:5173}")   // ★ 키 통일(frontend-url)
+  @Value("${app.frontend-url:http://localhost:5173}")
   private String FRONTEND_URL;
 
-  @Value("${app.cors.allowed-origins:}")                 // 쉼표로 여러 개 허용 가능
+  @Value("${app.cors.allowed-origins:}")
   private String allowedOriginsCsv;
 
-  private String jwtSecret;
-
   @Bean
-  SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-    http
-      // OAuth2 인가코드 플로우는 세션을 잠깐 사용 → IF_REQUIRED
-      .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+  SecurityFilterChain filterChain(HttpSecurity http,
+                                  ClientRegistrationRepository clientRegistrationRepository) throws Exception {
 
+    // --- 카카오용: PKCE 파라미터 제거(code_challenge, code_challenge_method) ---
+    var delegate = new DefaultOAuth2AuthorizationRequestResolver(
+        clientRegistrationRepository, "/oauth2/authorization");
+
+    OAuth2AuthorizationRequestResolver noPkceForKakaoResolver = new OAuth2AuthorizationRequestResolver() {
+      @Override
+      public OAuth2AuthorizationRequest resolve(HttpServletRequest request) {
+        return customize(delegate.resolve(request));
+      }
+      @Override
+      public OAuth2AuthorizationRequest resolve(HttpServletRequest request, String clientRegistrationId) {
+        return customize(delegate.resolve(request, clientRegistrationId));
+      }
+      private OAuth2AuthorizationRequest customize(OAuth2AuthorizationRequest original) {
+        if (original == null) return null;
+
+        String registrationId = (String) original.getAttributes().get("registration_id");
+        if (!"kakao".equalsIgnoreCase(registrationId)) return original;
+
+        Map<String, Object> additional = new HashMap<>(original.getAdditionalParameters());
+        // 상수 충돌 방지: 문자열 리터럴로 제거
+        additional.remove("code_challenge");
+        additional.remove("code_challenge_method");
+
+        return OAuth2AuthorizationRequest.from(original)
+            .additionalParameters(additional)
+            .build();
+      }
+    };
+    // -----------------------------------------------------------------------
+
+    http
+      .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
       .csrf(c -> c.ignoringRequestMatchers("/api/**","/auth/**"))
       .cors(c -> c.configurationSource(cors()))
 
       .authorizeHttpRequests(a -> a
-        // ★ 변경: /auth/** 전체 공개 → 제거
-        .requestMatchers("/", "/login", "/oauth2/**", "/login/oauth2/**").permitAll() // ★ 변경
+        .requestMatchers("/", "/login", "/oauth2/**", "/login/oauth2/**").permitAll()
         .requestMatchers(HttpMethod.GET, "/health").permitAll()
-        .requestMatchers(HttpMethod.POST, "/auth/refresh").permitAll()               // ★ 변경: refresh만 공개
+        .requestMatchers(HttpMethod.POST, "/auth/refresh").permitAll()
         .anyRequest().authenticated()
       )
 
       .oauth2Login(o -> o
+        .authorizationEndpoint(ep -> ep.authorizationRequestResolver(noPkceForKakaoResolver))
         .userInfoEndpoint(u -> u.userService(customOAuth2UserService))
         .successHandler(oAuth2LoginSuccessHandler)
         .failureHandler((req, res, ex) -> {
@@ -67,7 +99,7 @@ public class SecurityConfig {
       )
 
       .oauth2ResourceServer(rs -> rs
-        .jwt(Customizer.withDefaults())     // JwtDecoder 빈 사용
+        .jwt(Customizer.withDefaults())
         .bearerTokenResolver(cookieOrAuthHeader())
       );
 
@@ -81,7 +113,11 @@ public class SecurityConfig {
       String h = request.getHeader(HttpHeaders.AUTHORIZATION);
       if (h != null && h.startsWith("Bearer ")) return h.substring(7);
       var cs = request.getCookies();
-      if (cs != null) for (var c : cs) if ("ACCESS".equals(c.getName())) return c.getValue();
+      if (cs != null) {
+        for (var c : cs) {
+          if ("ACCESS".equals(c.getName())) return c.getValue();
+        }
+      }
       return null;
     };
   }
@@ -90,7 +126,6 @@ public class SecurityConfig {
   CorsConfigurationSource cors() {
     var cfg = new CorsConfiguration();
 
-    // 허용 오리진: app.cors.allowed-origins 있으면 우선, 없으면 FRONTEND_URL 사용
     List<String> origins;
     if (allowedOriginsCsv != null && !allowedOriginsCsv.isBlank()) {
       origins = Arrays.stream(allowedOriginsCsv.split(","))
@@ -100,11 +135,11 @@ public class SecurityConfig {
     } else {
       origins = List.of(FRONTEND_URL);
     }
-    cfg.setAllowedOriginPatterns(origins);      // 분리 도메인/서브도메인 패턴 대응
+    cfg.setAllowedOriginPatterns(origins);
     cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","PATCH","OPTIONS"));
     cfg.setAllowedHeaders(List.of("*"));
-    cfg.setAllowCredentials(true);              // 쿠키 인증 허용
-    cfg.setExposedHeaders(List.of("Authorization")); // (선택) 헤더 노출
+    cfg.setAllowCredentials(true);
+    cfg.setExposedHeaders(List.of("Authorization"));
 
     var src = new UrlBasedCorsConfigurationSource();
     src.registerCorsConfiguration("/**", cfg);

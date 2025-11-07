@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-// ✅ axios 인스턴스를 직접 사용(기존 인터셉터 활용)
-import apiClient from '@/api/axios';
+// ✅ axios 인스턴스 교체: 쿠키 전송되는 authClient 사용
+import authClient from '@/api/authClient';
 
 const OAuth2Success = () => {
   const nav = useNavigate();
@@ -23,19 +23,18 @@ const OAuth2Success = () => {
           return;
         }
 
-        // 1) 서버가 쿼리/해시로 토큰을 넘겨준 경우 저장 (axios는 localStorage의 'token'을 사용함)
+        // 1) 서버가 쿼리/해시로 토큰을 넘겨준 경우 저장
         const hash = new URLSearchParams(loc.hash.replace(/^#/, ''));
         const tokenFromQuery = sp.get('token') || hash.get('token');
         if (tokenFromQuery) {
-          localStorage.setItem('token', tokenFromQuery);               // ✅ 기존 axios 인터셉터 호환
-          apiClient.defaults.headers.Authorization = `Bearer ${tokenFromQuery}`; // (선반영) 첫 요청 안정화
-          // URL 정리(토큰 제거)
+          localStorage.setItem('token', tokenFromQuery);
+          // authClient는 쿠키 기반이므로 굳이 헤더 세팅 불필요
           const cleanUrl = window.location.pathname;
           window.history.replaceState({}, '', cleanUrl);
         }
 
-        // 2) 세션/토큰 확인: 서버가 httpOnly 쿠키만 심었더라도 통과됨
-        await apiClient.get('/auth/me');
+        // 2) ✅ 세션/쿠키 기반 확인: 반드시 authClient( withCredentials:true )
+        await authClient.get('/auth/me');
 
         // 3) 성공 → 메인으로
         nav('/ingredients', { replace: true });

@@ -4,14 +4,15 @@ import { useState } from 'react';
 const Login = () => {
   const [redirecting, setRedirecting] = useState(false);
 
-  // [CHANGED] 절대 백엔드 주소 확정(프록시 사용 안 함)
+  // 절대 백엔드 주소 확정(프록시 사용 안 함)
   const API_BASE = (
-    import.meta.env.VITE_API_BASE ||           // 새 변수
-    import.meta.env.VITE_API_BASE_URL ||       // 기존 변수 호환
-    'http://localhost:8080'                    // 개발 기본값
+    import.meta.env.VITE_API_BASE ||          // 새 변수
+    import.meta.env.VITE_API_BASE_URL ||      // 기존 변수 호환
+    'http://localhost:8080'                   // 개발 기본값
   ).replace(/\/$/, '');
 
-  // [CHANGED] 무조건 백엔드의 인가 엔드포인트로 리디렉트
+  // ❗버그 수정: 백틱 누락으로 문자열 템플릿이 깨져 있었음
+  // 무조건 백엔드의 인가 엔드포인트로 리디렉트
   const kakaoAuthUrl = `${API_BASE}/oauth2/authorization/kakao`;
 
   const handleKakao = () => {
