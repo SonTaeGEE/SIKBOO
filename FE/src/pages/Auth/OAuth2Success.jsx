@@ -2,8 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-// ✅ axios 인스턴스 교체: 쿠키 전송되는 authClient 사용
-import authClient from '@/api/authClient';
+import { getMe } from '@/api/userApi';
 
 const OAuth2Success = () => {
   const nav = useNavigate();
@@ -34,7 +33,7 @@ const OAuth2Success = () => {
         }
 
         // 2) ✅ 세션/쿠키 기반 확인: 반드시 authClient( withCredentials:true )
-        await authClient.get('/auth/me');
+        await getMe();
 
         // 3) 성공 → 메인으로
         nav('/ingredients', { replace: true });

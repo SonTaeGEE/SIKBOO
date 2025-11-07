@@ -6,10 +6,10 @@ const Login = () => {
 
   // 절대 백엔드 주소 확정(프록시 사용 안 함)
   const API_BASE = (
-    import.meta.env.VITE_API_BASE ||          // 새 변수
-    import.meta.env.VITE_API_BASE_URL ||      // 기존 변수 호환
-    'http://localhost:8080'                   // 개발 기본값
-  ).replace(/\/$/, '');
+    import.meta.env.VITE_API_BASE_URL || // 기존 변수 호환
+    'http://localhost:8080'
+  ) // 개발 기본값
+    .replace(/\/$/, '');
 
   // ❗버그 수정: 백틱 누락으로 문자열 템플릿이 깨져 있었음
   // 무조건 백엔드의 인가 엔드포인트로 리디렉트
@@ -48,12 +48,6 @@ const Login = () => {
             </svg>
             {redirecting ? '카카오로 이동 중...' : '카카오로 계속하기'}
           </button>
-
-          {/* 디버그(임시): 실제로 어디로 가는지 눈으로 확인 */}
-          <div className="mt-6 text-center text-xs text-gray-500">
-            <p>API_BASE = {API_BASE}</p>
-            <p>AUTH URL = {kakaoAuthUrl}</p>
-          </div>
         </div>
       </div>
     </div>

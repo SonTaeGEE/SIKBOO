@@ -1,41 +1,41 @@
-import apiClient from '@/api/axios';
+import axiosInstance from '@/api/axiosInstance';
 
 // Example API call function
 export const fetchUsers = async () => {
-  const response = await apiClient.get('/users');
+  const response = await axiosInstance.get('/users');
   return response.data;
 };
 
 export const fetchUserById = async (id) => {
-  const response = await apiClient.get(`/users/${id}`);
+  const response = await axiosInstance.get(`/users/${id}`);
   return response.data;
 };
 
 export const createUser = async (userData) => {
-  const response = await apiClient.post('/users', userData);
+  const response = await axiosInstance.post('/users', userData);
   return response.data;
 };
 
 export const updateUser = async ({ id, userData }) => {
-  const response = await apiClient.put(`/users/${id}`, userData);
+  const response = await axiosInstance.put(`/users/${id}`, userData);
   return response.data;
 };
 
 export const deleteUser = async (id) => {
-  const response = await apiClient.delete(`/users/${id}`);
+  const response = await axiosInstance.delete(`/users/${id}`);
   return response.data;
 };
 
 // [CHANGED] 추가: 소셜 로그인 후 내 프로필 조회 (쿠키 기반 인증)
 export const getMe = async () => {
   // 백엔드에서 ACCESS HttpOnly 쿠키를 심었다면, axios.withCredentials=true로 전송됨
-  const res = await apiClient.get('/auth/me');
+  const res = await axiosInstance.get('/auth/me');
   return res.data; // { id, email, name, role, ... } 형태 기대
 };
 
 // [OPTIONAL][CHANGED] 필요 시: 인가코드 -> 토큰 교환(백엔드에 구현돼 있으면 사용)
 export const exchangeCode = async ({ provider, code, redirectUri }) => {
-  const res = await apiClient.post(`/auth/oauth2/${provider}/callback`, {
+  const res = await axiosInstance.post(`/auth/oauth2/${provider}/callback`, {
     code,
     redirectUri,
   });
