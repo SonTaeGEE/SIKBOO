@@ -13,7 +13,7 @@ import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 public class AuthController {
 
   private final MemberRepository memberRepository; // ★ JWT의 sub로 회원 조회
@@ -32,7 +32,6 @@ public class AuthController {
 
       return Map.of(
         "id", m.getId(),
-        "email", m.getEmail(),
         "name", m.getName(),
         "role", m.getRole()
       );
@@ -43,8 +42,7 @@ public class AuthController {
     if (p instanceof org.springframework.security.oauth2.core.user.OAuth2User o) {
       var attrs = o.getAttributes();
       return Map.of(
-        "name", String.valueOf(attrs.getOrDefault("name","")),
-        "email", String.valueOf(attrs.getOrDefault("email",""))
+        "name", String.valueOf(attrs.getOrDefault("name",""))
       );
     }
 

@@ -17,9 +17,10 @@ CREATE TYPE ingredient_location AS ENUM ('냉장고', '냉동실', '실온');
 -- ============================================
 CREATE TABLE member (
     member_id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(100) NOT NULL UNIQUE,
-    password VARCHAR(1000) NOT NULL,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    provider VARCHAR(30) NOT NULL DEFAULT 'LOCAL',
+    provider_id VARCHAR(100),
+    role VARCHAR(20) NOT NULL DEFAULT 'USER',
     disease VARCHAR(1000),
     allergy VARCHAR(1000),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -160,7 +161,6 @@ COMMENT ON TABLE refresh_token IS 'JWT 리프레시 토큰 정보';
 -- 인덱스
 -- ============================================
 
-CREATE INDEX idx_member_email ON member(email);
 CREATE INDEX idx_ingredient_member ON ingredient(member_id);
 CREATE INDEX idx_ingredient_due ON ingredient(due);
 CREATE INDEX idx_recipe_member ON recipe(member_id);

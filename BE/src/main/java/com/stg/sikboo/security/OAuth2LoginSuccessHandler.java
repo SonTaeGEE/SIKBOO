@@ -45,11 +45,9 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     // ★ providerId/email 추출 (UserService에서 upsert 했으므로 DB에는 존재)
     String providerId = extractProviderId(provider, a);
-    String email = extractEmail(provider, a); // 없을 수도 있음
 
     // ★ DB 조회: provider+providerId 우선, 없으면 email fallback
-    Member m = memberRepository.findByProviderAndProviderId(provider.toUpperCase(), providerId)
-        .orElseGet(() -> email != null ? memberRepository.findByEmail(email).orElse(null) : null);
+    Member m = memberRepository.findByProviderAndProviderId(provider.toUpperCase(), providerId).orElse(null);
 
     if (m == null) {
       // 이 경우는 거의 없지만, 복구 불가 시 로그인 페이지로 돌려보냄
@@ -58,7 +56,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     }
 
     // 토큰 발급
-    String access  = jwtIssuer.access(m.getId(), java.util.List.of("ROLE_" + m.getRole()), Duration.ofMinutes(30));
+    String access  = jwtIssuer.access(m.getId(), java.util.List.of("ROLE_" + m.getRole()), Duration.ofMinutes(60));
     String refresh = jwtIssuer.refresh(m.getId(), Duration.ofDays(14));
 
     // 회전: 기존 리프레시 제거 후 새로 저장
@@ -98,22 +96,6 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
       case "naver"  -> {
         Map<String,Object> r = (Map<String,Object>) a.get("response");
         yield r != null ? (String) r.get("id") : null;
-      }
-      default -> null;
-    };
-  }
-
-  // ★ provider별 email 추출(없을 수 있음)
-  private String extractEmail(String provider, Map<String, Object> a) {
-    return switch (provider) {
-      case "google" -> (String) a.get("email");
-      case "kakao"  -> {
-        Map<String,Object> acc = (Map<String,Object>) a.get("kakao_account");
-        yield acc != null ? (String) acc.get("email") : null;
-      }
-      case "naver"  -> {
-        Map<String,Object> r = (Map<String,Object>) a.get("response");
-        yield r != null ? (String) r.get("email") : null;
       }
       default -> null;
     };
