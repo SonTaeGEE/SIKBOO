@@ -35,6 +35,13 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
 	
+	//oauth, jwt
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server' // JWT 검증
+ 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+ 	implementation 'com.nimbusds:nimbus-jose-jwt:9.41.2'  // JWT 발급
+ 	implementation 'org.springframework.security:spring-security-oauth2-jose'   // Jwt/JwtDecoder 들어있음
+	
 	// Hibernate Spatial for PostGIS
 	implementation 'org.hibernate.orm:hibernate-spatial'
 	implementation 'net.postgis:postgis-jdbc:2024.1.0'
