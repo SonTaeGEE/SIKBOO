@@ -1,150 +1,58 @@
+// src/pages/Auth/Login.jsx
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
-  const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [redirecting, setRedirecting] = useState(false);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    // 입력 시 에러 제거
-    if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: '',
-      }));
-    }
-  };
+  // 절대 백엔드 주소 확정(프록시 사용 안 함)
+  const API_BASE = (
+    import.meta.env.VITE_API_BASE ||          // 새 변수
+    import.meta.env.VITE_API_BASE_URL ||      // 기존 변수 호환
+    'http://localhost:8080'                   // 개발 기본값
+  ).replace(/\/$/, '');
 
-  const validateForm = () => {
-    const newErrors = {};
+  // ❗버그 수정: 백틱 누락으로 문자열 템플릿이 깨져 있었음
+  // 무조건 백엔드의 인가 엔드포인트로 리디렉트
+  const kakaoAuthUrl = `${API_BASE}/oauth2/authorization/kakao`;
 
-    if (!formData.email) {
-      newErrors.email = '이메일을 입력해주세요';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = '올바른 이메일 형식이 아닙니다';
-    }
-
-    if (!formData.password) {
-      newErrors.password = '비밀번호를 입력해주세요';
-    } else if (formData.password.length < 6) {
-      newErrors.password = '비밀번호는 최소 6자 이상이어야 합니다';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    try {
-      // TODO: API 연동
-      console.log('로그인 데이터:', formData);
-
-      // 임시: 로그인 성공 시 메인 페이지로 이동
-      alert('로그인 성공!');
-      navigate('/ingredients');
-    } catch (error) {
-      console.error('로그인 실패:', error);
-      alert('로그인에 실패했습니다. 다시 시도해주세요.');
-    }
+  const handleKakao = () => {
+    setRedirecting(true);
+    // SPA 라우팅이 아니라 실제 네비게이션으로 이동해야 함
+    window.location.href = kakaoAuthUrl;
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-purple-50 to-white px-4">
       <div className="w-full max-w-md">
-        {/* 로고 및 타이틀 */}
+        {/* 로고 & 타이틀 */}
         <div className="mb-8 text-center">
           <h1 className="mb-2 text-4xl font-bold text-[#5f0080]">식재료부</h1>
           <p className="text-gray-600">함께하는 똑똑한 식재료 관리</p>
         </div>
 
-        {/* 로그인 폼 */}
+        {/* 카드 */}
         <div className="rounded-2xl bg-white p-8 shadow-lg">
           <h2 className="mb-6 text-2xl font-bold text-gray-800">로그인</h2>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* 이메일 */}
-            <div>
-              <label htmlFor="email" className="mb-2 block text-sm font-medium text-gray-700">
-                이메일
-              </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                className={`w-full rounded-lg border ${
-                  errors.email ? 'border-red-500' : 'border-gray-300'
-                } px-4 py-3 focus:border-[#5f0080] focus:ring-2 focus:ring-[#5f0080]/20 focus:outline-none`}
-                placeholder="아이디(이메일)를  입력해주세요."
+          <button
+            type="button"
+            onClick={handleKakao}
+            disabled={redirecting}
+            className="flex w-full items-center justify-center gap-3 rounded-lg bg-[#FEE500] py-3 font-semibold text-[#191600] shadow hover:brightness-95 disabled:opacity-70"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="#191600"
+                d="M12 3C6.477 3 2 6.477 2 10.774c0 2.86 1.94 5.355 4.86 6.776-.17.63-.61 2.25-.7 2.6-.11.44.16.43.34.31.14-.09 2.2-1.49 3.09-2.1.77.11 1.56.17 2.41.17 5.523 0 10-3.477 10-7.85C22 6.477 17.523 3 12 3z"
               />
-              {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
-            </div>
+            </svg>
+            {redirecting ? '카카오로 이동 중...' : '카카오로 계속하기'}
+          </button>
 
-            {/* 비밀번호 */}
-            <div>
-              <label htmlFor="password" className="mb-2 block text-sm font-medium text-gray-700">
-                비밀번호
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className={`w-full rounded-lg border ${
-                    errors.password ? 'border-red-500' : 'border-gray-300'
-                  } px-4 py-3 pr-12 focus:border-[#5f0080] focus:ring-2 focus:ring-[#5f0080]/20 focus:outline-none`}
-                  placeholder="비밀번호를  입력해주세요."
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute top-1/2 right-3 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-              {errors.password && <p className="mt-1 text-sm text-red-500">{errors.password}</p>}
-            </div>
-
-            {/* 로그인 버튼 */}
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-[#5f0080] py-3 font-semibold text-white transition-colors hover:bg-[#4a0066]"
-            >
-              로그인
-            </button>
-          </form>
-
-          <div className="mt-6 space-y-3 text-center text-sm">
-            <div className="flex justify-center gap-2 text-gray-600">
-              계정이 없으신가요?
-              <button
-                onClick={() => navigate('/signup')}
-                className="font-semibold text-[#5f0080] hover:underline"
-              >
-                회원가입
-              </button>
-            </div>
+          {/* 디버그(임시): 실제로 어디로 가는지 눈으로 확인 */}
+          <div className="mt-6 text-center text-xs text-gray-500">
+            <p>API_BASE = {API_BASE}</p>
+            <p>AUTH URL = {kakaoAuthUrl}</p>
           </div>
         </div>
       </div>

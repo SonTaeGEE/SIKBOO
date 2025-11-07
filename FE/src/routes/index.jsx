@@ -9,12 +9,13 @@ import CreateGroupBuying from '@/pages/GroupBuying/CreateGroupBuying';
 import MyPage from '@/pages/MyPage/MyPage';
 import Login from '@/pages/Auth/Login';
 import Signup from '@/pages/Auth/Signup';
+import OAuth2Success from '@/pages/Auth/OAuth2Success';
 
 const AppRoutes = () => {
   const location = useLocation();
 
   // 인증 페이지 여부 확인
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup'|| location.pathname === '/oauth2/success';// ✅ 
 
   // 페이지별 헤더 설정
   const getHeaderConfig = () => {
@@ -53,6 +54,7 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/auth/kakao/callback" element={<OAuth2Success />} /> {/* ✅ 추가 */}
       </Routes>
     );
   }
