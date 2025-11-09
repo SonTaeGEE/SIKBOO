@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/ingredients") // 이 하위 경로로 CRUD 제공
+@RequestMapping("/api/ingredients")
 public class IngredientController {
 
     private final IngredientService service;
@@ -36,12 +36,12 @@ public class IngredientController {
     /** 목록: 내 것만, 위치/검색/정렬/페이징 지원 */
     @GetMapping
     public PageResponseDTO<IngredientResponseDTO> list(
-            @RequestParam(required = false) IngredientLocation location,
-            @RequestParam(required = false) String q,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String sort,
-            @RequestParam(required = false) String order
+    		@RequestParam(name = "location", required = false) IngredientLocation location,
+            @RequestParam(name = "q", required = false) String q,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sort", required = false) String sort,
+            @RequestParam(name = "order", required = false) String order
     ) {
         Long memberId = currentMemberId(); // ★ 오너십 보장(항상 내 memberId만 사용)
         return service.list(memberId, location, q, page, size, sort, order);
@@ -56,7 +56,25 @@ public class IngredientController {
     /** 생성: 서버가 JWT에서 memberId를 주입(클라이언트가 임의 변경 불가) */
     @PostMapping
     public ResponseEntity<?> create(@RequestBody CreateIngredientRequestDTO req) {
-        Long id = service.create(currentMemberId(), req);
+        // SecurityContext에서 memberId 클레임 추출 (없으면 401)
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+
+        Long memberId;
+        Object principal = auth.getPrincipal();
+        if (principal instanceof Jwt jwt) {
+            Object claim = jwt.getClaim("memberId");
+            if (claim == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+            try {
+                memberId = Long.valueOf(String.valueOf(claim));
+            } catch (NumberFormatException ex) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+            }
+        } else {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+
+        Long id = service.create(memberId, req);
         return ResponseEntity.status(HttpStatus.CREATED).body(new IdRes(id));
     }
 

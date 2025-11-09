@@ -1,4 +1,3 @@
-// src/main/java/com/stg/sikboo/Ingredient/dto/request/UpdateIngredientRequestDTO.java
 package com.stg.sikboo.ingredient.dto.request;
 
 import com.stg.sikboo.ingredient.domain.IngredientLocation;
@@ -6,9 +5,6 @@ import com.stg.sikboo.ingredient.domain.IngredientLocation;
 /**
  * 재료 부분수정 요청 DTO
  *
- * 동작
- * - null/빈값은 기존 값 유지
- * - due가 오면 "YYYY-MM-DD" 형식 검사(서비스에서 400 처리)
  *
  * 예시(부분 수정)
  * PATCH /api/ingredients/141

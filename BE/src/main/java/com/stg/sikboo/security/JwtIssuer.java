@@ -25,6 +25,7 @@ public class JwtIssuer {
     try {
       var claims = new JWTClaimsSet.Builder()
           .subject(String.valueOf(uid))
+          .claim("memberId", uid)
           .claim("roles", roles)
           .claim("typ","access")
           .issueTime(new Date())

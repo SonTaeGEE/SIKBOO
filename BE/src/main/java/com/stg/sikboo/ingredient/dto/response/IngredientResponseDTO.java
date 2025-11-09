@@ -1,4 +1,3 @@
-// src/main/java/com/stg/sikboo/Ingredient/dto/response/IngredientResponseDTO.java
 package com.stg.sikboo.ingredient.dto.response;
 
 import java.time.LocalDate;
@@ -10,9 +9,6 @@ import com.stg.sikboo.ingredient.domain.IngredientLocation;
 /**
  * 재료 단건 응답 DTO
  *
- * 규칙
- * - due는 "YYYY-MM-DD" 문자열로 직렬화 (프론트에서 날짜만 쓰기 간편)
- * - daysLeft, isExpired는 서버 계산값(오늘 기준) — 프론트에서 재계산 불필요
  *
  * 예시 응답(JSON)
  * {

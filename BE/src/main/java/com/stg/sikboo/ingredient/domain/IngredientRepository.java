@@ -1,4 +1,3 @@
-// src/main/java/com/stg/sikboo/Ingredient/domain/IngredientRepository.java
 package com.stg.sikboo.ingredient.domain;
 
 import java.time.LocalDateTime;
@@ -13,7 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
 
-    // 목록 + 검색 (네이티브)  ★ location은 String
+    // 목록 + 검색
     @Query(
       value = """
         SELECT i.*
@@ -21,7 +20,7 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
         WHERE i.member_id = :memberId
           AND (:location IS NULL OR i.location::text = :location)
           AND (:q IS NULL OR lower(i.ingredient_name) LIKE lower(concat('%', :q, '%')))
-        ORDER BY i.due ASC, i.ingredient_name ASC
+      	ORDER BY i.due ASC, i.ingredient_name ASC
       """,
       countQuery = """
         SELECT count(*)
@@ -34,12 +33,14 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
     )
     Page<Ingredient> search(
         @Param("memberId") Long memberId,
-        @Param("location") String location,   // ★ 여기 String
+        @Param("location") String location,   // 서비스에서 enum → name() 으로 바꿔 String 전달
         @Param("q") String q,
         Pageable pageable
     );
 
-    // 중복 후보 조회 (네이티브)  ★ location은 String
+    // 중복 후보 조회 
+    // "같은 위치(location)에, 같은 날짜 구간(start <= due < end)에 있는" 레코드들을 조회
+    // - 서비스에서 이름 정규화(norm)하여 "이름이 같은지"를 최종 비교
     @Query(
       value = """
         SELECT i.*
@@ -52,10 +53,11 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
     )
     List<Ingredient> findDupCandidates(
         @Param("memberId") Long memberId,
-        @Param("location") String location,   // ★ 여기 String
-        @Param("start") LocalDateTime startInclusive,
-        @Param("end") LocalDateTime endExclusive
+        @Param("location") String location,   // enum → name() 으로 받은 문자열
+        @Param("start") LocalDateTime startInclusive,  // 해당 날짜의 00:00 (포함)
+        @Param("end") LocalDateTime endExclusive       // 다음날 00:00 (제외)
     );
 
+    // 단건 조회(소유자 일치)
     Optional<Ingredient> findByIdAndMemberId(Long id, Long memberId);
 }

@@ -7,10 +7,6 @@ import java.util.List;
 /**
  * 표준 페이징 래퍼
  *
- * 규칙
- * - page: 0 기반 인덱스
- * - size: 페이지 크기
- * - totalElements/totalPages: 전체 개수/페이지 수
  *
  * 예시 응답(JSON)
  * {
