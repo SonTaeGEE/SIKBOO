@@ -33,6 +33,9 @@ export const getMe = async () => {
   return res.data; // { id, email, name, role, ... } 형태 기대
 };
 
+// authApi에 이미 정의한 logout을 여기서도 재내보내기(호출부 호환성 유지)
+export { logout } from './authApi';
+
 // [OPTIONAL][CHANGED] 필요 시: 인가코드 -> 토큰 교환(백엔드에 구현돼 있으면 사용)
 export const exchangeCode = async ({ provider, code, redirectUri }) => {
   const res = await axiosInstance.post(`/auth/oauth2/${provider}/callback`, {
