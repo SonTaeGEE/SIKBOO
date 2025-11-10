@@ -182,18 +182,23 @@ export default function Recipes() {
         )}
       </div>
 
-      {/* 하단 생성 버튼 (장바구니형 슬라이드 업) */}
+      {/* ▼▼ 슬라이드 업 바: 선택 전 완전 비가시화 → 사라질 때도 부드럽게 */}
       <div
         className={cx(
-          "fixed inset-x-0 bottom-0 z-20 transition-transform duration-300",
-          selCount > 0 ? "translate-y-0" : "translate-y-[110%]"
+          "fixed inset-x-0 bottom-[calc(64px+32px)] z-[999]",
+          // translate + opacity 모두 부드럽게
+          "transform-gpu transition-all duration-300 ease-in-out",
+          "pointer-events-none",
+          selCount > 0
+            ? "translate-y-0 opacity-100"
+            : "translate-y-[140%] opacity-0"
         )}
       >
-        <div className="mx-auto max-w-full md:max-w-screen-md lg:max-w-4xl px-4 md:px-6 lg:px-8 pb-[calc(16px+env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-full md:max-w-screen-md lg:max-w-4xl px-4 md:px-6 lg:px-8">
           <button
             onClick={() => gen.mutate()}
             disabled={gen.isPending || selCount === 0}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-500 py-4 text-white shadow-lg disabled:opacity-60"
+            className="pointer-events-auto flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-4 text-white shadow-lg disabled:opacity-60"
           >
             레시피 생성
             {selCount > 0 && (
