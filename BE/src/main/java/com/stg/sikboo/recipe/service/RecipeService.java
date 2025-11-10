@@ -35,13 +35,30 @@ public class RecipeService {
                     "오이를 어슷썰어 양념과 함께 무친다.")
     );
 
-    // ---------- Ingredient 테이블에서 내 재료 이름 조회 ----------
+    // ---------- 내 재료 목록 (생성 탭) ----------
+    // 프론트 기대 형태: [{ id, name }]
+    public List<Map<String, Object>> findMyIngredients(Long memberId) {
+        String sql = """
+            SELECT ingredient_id AS id, ingredient_name AS name
+            FROM ingredient
+            WHERE member_id = :memberId
+            ORDER BY ingredient_id DESC
+        """;
+        return jdbc.query(sql, Map.of("memberId", memberId), (rs, i) -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", rs.getLong("id"));
+            m.put("name", rs.getString("name"));
+            return m;
+        });
+    }
+
+    // ---------- 선택한 재료 이름 조회 ----------
     private Set<String> getIngredientNames(Long memberId, List<Long> ids) {
         if (ids == null || ids.isEmpty()) return Set.of();
 
         String sql = """
-            SELECT ingredient_name 
-            FROM ingredient 
+            SELECT ingredient_name
+            FROM ingredient
             WHERE member_id = :memberId AND ingredient_id IN (:ids)
         """;
 
@@ -55,7 +72,7 @@ public class RecipeService {
 
     // ---------- 레시피 생성 ----------
     public List<RecipeSuggestionResponse> generateRecipes(RecipeGenerateRequest req) {
-        Long memberId = req.memberId() != null ? req.memberId() : 1L;
+        Long memberId = req.memberId(); // 컨트롤러에서 JWT로 강제 세팅됨
         Set<String> selectedNames = getIngredientNames(memberId, req.ingredientIds());
         List<RecipeSuggestionResponse> result = new ArrayList<>();
 
@@ -83,7 +100,7 @@ public class RecipeService {
             ));
         }
 
-        // DB 저장 (선택)
+        // (선택) 생성 결과 저장
         for (RecipeSuggestionResponse r : result) {
             Recipe entity = new Recipe();
             entity.setMemberId(memberId);
@@ -101,11 +118,15 @@ public class RecipeService {
                 .map(r -> new RecipeSuggestionResponse(
                         r.getId(),
                         r.getName(),
-                        List.of(),
+                        List.of(),  // main/seasoning/missing은 LLM 연동 후 채움
                         List.of(),
                         List.of(),
                         r.getDetail()
                 ))
                 .toList();
+    }
+
+    public void recommendMore(Long memberId) {
+        // TODO: LLM 붙이면서 확장
     }
 }
