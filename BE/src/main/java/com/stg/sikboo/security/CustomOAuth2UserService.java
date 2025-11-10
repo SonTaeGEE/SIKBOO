@@ -1,8 +1,10 @@
+// ...existing code...
 package com.stg.sikboo.security;
 
 import com.stg.sikboo.member.domain.Member;
 import com.stg.sikboo.member.domain.MemberRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -28,31 +31,42 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
     var oauth2User = delegate.loadUser(req);
 
     String provider = req.getClientRegistration().getRegistrationId(); // google/kakao/naver
+    String providerNorm = provider.toUpperCase(); // 일관성 유지
     Map<String, Object> attributes = oauth2User.getAttributes();
 
     Profile p = Profile.from(provider, attributes);
 
-    // (provider, providerId) 로만 식별
-    Member m = memberRepository.findByProviderAndProviderId(p.provider, p.providerId)
-        .orElseGet(() -> {
-          Member created = new Member();
-          created.setRole("USER");
-          created.setProvider(p.provider.toUpperCase());
-          created.setProviderId(p.providerId);
-          // name 이 비어있으면 안전값
-          created.setName(p.name != null ? p.name : p.provider + "_" + p.providerId);
-          // 프로필 이미지 필드가 있으면 주입
-          // if (p.image != null) created.setProfileImage(p.image);
-          return created;
-        });
+    // 안전한 조회: 중복 가능성을 방어하고 동시성 시도에서도 오류가 나지 않도록 구현
+    Optional<Member> existing = memberRepository.findFirstByProviderAndProviderId(providerNorm, p.providerId);
+    Member m;
+    if (existing.isPresent()) {
+      m = existing.get();
+    } else {
+      Member created = new Member();
+      created.setRole("USER");
+      created.setProvider(providerNorm);
+      created.setProviderId(p.providerId);
+      created.setName(p.name != null ? p.name : p.provider + "_" + p.providerId);
 
-    // 이름/이미지 갱신(선택)
+      try {
+        m = memberRepository.save(created); // 동시 생성 시 DB 제약에 의해 실패 가능
+      } catch (DataIntegrityViolationException ex) {
+        // 동시성으로 인한 중복 생성 실패 시 기존 레코드 재조회
+        m = memberRepository.findFirstByProviderAndProviderId(providerNorm, p.providerId)
+            .orElseThrow(() -> new OAuth2AuthenticationException(new OAuth2Error("member_error"),
+                "Failed to create or retrieve member"));
+      }
+    }
+
+    // 선택적 업데이트: 이름/이미지 변경 시 저장
+    boolean changed = false;
     if (p.name != null && !p.name.equals(m.getName())) {
       m.setName(p.name);
+      changed = true;
     }
-    // if (p.image != null) m.setProfileImage(p.image);
+    // if (p.image != null && !p.image.equals(m.getProfileImage())) { m.setProfileImage(p.image); changed = true; }
 
-    memberRepository.save(m);
+    if (changed) memberRepository.save(m);
 
     return new DefaultOAuth2User(
         List.of(new SimpleGrantedAuthority("ROLE_" + (m.getRole() != null ? m.getRole() : "USER"))),
@@ -61,15 +75,13 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
     );
   }
 
-  // ----- helpers -----
+  // ----- helpers ----- (unchanged)
   static class Profile {
     String provider, providerId, name, image;
-
     @SuppressWarnings("unchecked")
     static Profile from(String provider, Map<String, Object> a) {
       Profile p = new Profile();
       p.provider = provider;
-
       switch (provider) {
         case "google" -> {
           p.providerId = str(a.get("sub"));
@@ -80,8 +92,6 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
           p.providerId = str(a.get("id"));
           Map<String, Object> account = map(a.get("kakao_account"));
           Map<String, Object> prof    = account != null ? map(account.get("profile")) : null;
-
-          // 이메일을 더이상 사용하지 않음
           p.name  = prof != null ? str(prof.get("nickname")) : null;
           p.image = prof != null ? str(prof.get("profile_image_url")) : null;
         }
@@ -94,13 +104,12 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         default -> throw new OAuth2AuthenticationException(
             new OAuth2Error("unsupported_provider"), "Unsupported provider: " + provider);
       }
-
-      if (p.name == null) p.name = p.provider + "_" + p.providerId; // 표시명 안전값
+      if (p.name == null) p.name = p.provider + "_" + p.providerId;
       return p;
     }
-
     static String str(Object o) { return o == null ? null : String.valueOf(o); }
     @SuppressWarnings("unchecked")
     static Map<String, Object> map(Object o) { return (o instanceof Map<?, ?> m) ? (Map<String, Object>) m : null; }
   }
 }
+// ...existing code...

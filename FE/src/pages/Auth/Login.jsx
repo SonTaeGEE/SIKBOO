@@ -13,7 +13,7 @@ const Login = () => {
 
   // ❗버그 수정: 백틱 누락으로 문자열 템플릿이 깨져 있었음
   // 무조건 백엔드의 인가 엔드포인트로 리디렉트
-  const kakaoAuthUrl = `${API_BASE}/oauth2/authorization/kakao`;
+  const kakaoAuthUrl = `${API_BASE}/api/oauth2/authorization/kakao`;
 
   const handleKakao = () => {
     setRedirecting(true);

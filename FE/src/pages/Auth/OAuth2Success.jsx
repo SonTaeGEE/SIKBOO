@@ -22,12 +22,16 @@ const OAuth2Success = () => {
           return;
         }
 
-        // 1) 서버가 쿼리/해시로 토큰을 넘겨준 경우 저장
+        // 1) 서버가 쿼리/해시로 토큰을 넘겨준 경우 저장 (개발 페일백)
         const hash = new URLSearchParams(loc.hash.replace(/^#/, ''));
-        const tokenFromQuery = sp.get('token') || hash.get('token');
+        const tokenFromQuery = sp.get('token') || hash.get('token') || sp.get('access_token');
         if (tokenFromQuery) {
-          localStorage.setItem('token', tokenFromQuery);
-          // authClient는 쿠키 기반이므로 굳이 헤더 세팅 불필요
+          try {
+            localStorage.setItem('token', tokenFromQuery);
+          } catch (e) {
+            console.warn('Failed to save token to localStorage', e);
+          }
+          // URL에서 토큰 제거
           const cleanUrl = window.location.pathname;
           window.history.replaceState({}, '', cleanUrl);
         }

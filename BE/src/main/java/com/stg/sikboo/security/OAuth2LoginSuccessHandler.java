@@ -13,6 +13,7 @@ import org.springframework.security.oauth2.client.authentication.OAuth2Authentic
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Component;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.servlet.http.*;
 import java.io.IOException;
@@ -37,6 +38,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
   String sameSite;
 
   @Override
+  @Transactional
   public void onAuthenticationSuccess(HttpServletRequest req, HttpServletResponse res, Authentication auth) throws IOException {
     var principal = (OAuth2User) auth.getPrincipal();
     var oauth = (OAuth2AuthenticationToken) auth;                       // ★ provider 확인용
@@ -47,7 +49,10 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     String providerId = extractProviderId(provider, a);
 
     // ★ DB 조회: provider+providerId 우선, 없으면 email fallback
-    Member m = memberRepository.findByProviderAndProviderId(provider.toUpperCase(), providerId).orElse(null);
+    // provider 대소문자 일관화(저장 시와 동일하게 저장되도록 맞출 것)
+    Member m = memberRepository
+        .findFirstByProviderAndProviderId(provider.toUpperCase(), providerId)
+        .orElse(null);
 
     if (m == null) {
       // 이 경우는 거의 없지만, 복구 불가 시 로그인 페이지로 돌려보냄
@@ -71,10 +76,13 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     res.addHeader(HttpHeaders.SET_COOKIE, cookie("ACCESS", access, 1800, true));
     res.addHeader(HttpHeaders.SET_COOKIE, cookie("REFRESH", refresh, 14*24*3600, true));
 
-    // ★ 프론트 성공 페이지로 redirect
-    //    개발 편의상 access 토큰을 쿼리로도 전달 → 프론트에서 localStorage에 저장 후 Bearer 사용 가능
-    //    운영에서 URL 토큰 전달을 막으려면 아래 target에서 "?token=..." 부분을 제거하세요.
-    String target = frontend + "/oauth2/success?token=" + access;
+    // // ★ 프론트 성공 페이지로 redirect
+    // //    개발 편의상 access 토큰을 쿼리로도 전달 → 프론트에서 localStorage에 저장 후 Bearer 사용 가능
+    // //    운영에서 URL 토큰 전달을 막으려면 아래 target에서 "?token=..." 부분을 제거하세요.
+    // String target = frontend + "/oauth2/success?token=" + access;
+    // res.sendRedirect(target);
+    // ★ 프론트 성공 페이지로 redirect (보안: URL에 토큰 노출 금지)
+    String target = frontend + "/oauth2/success";
     res.sendRedirect(target);
   }
 
