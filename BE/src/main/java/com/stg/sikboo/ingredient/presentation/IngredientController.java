@@ -80,15 +80,16 @@ public class IngredientController {
 
     /** 수정: 부분수정 + 자신 제외 중복 검사 */
     @PatchMapping("/{id}")
-    public IngredientResponseDTO update(@PathVariable Long id, @RequestBody UpdateIngredientRequestDTO req) {
+    public IngredientResponseDTO update(@PathVariable("id") Long id, @RequestBody UpdateIngredientRequestDTO req) {
         return service.update(currentMemberId(), id, req);
     }
 
     /** 삭제: 내 소유만 삭제 가능 */
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable Long id) {
+    public void delete(@PathVariable("id") Long id) {
         service.delete(currentMemberId(), id);
+
     }
 
     /** 생성 응답용 심플 DTO */

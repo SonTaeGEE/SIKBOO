@@ -1,43 +1,64 @@
 import axios from 'axios';
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080') + '/api';
+
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL + '/api' || 'http://localhost:8080/api',
+  baseURL: API_BASE,
   timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  withCredentials: true, // [CHANGED] 카카오 로그인 이후 ACCESS 쿠키 전송
-  useAuth: true, // 커스텀 옵션: 토큰 자동 설정 여부
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true, // 쿠키 기반 인증
 });
 
-// Request interceptor
-axiosInstance.interceptors.request.use(
-  (config) => {
-    // Add token to headers if available
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+// --- Refresh 재시도 로직 ---
+let isRefreshing = false;
+let failedQueue = [];
 
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  },
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(p => (error ? p.reject(error) : p.resolve(token)));
+  failedQueue = [];
+};
+
+axiosInstance.interceptors.request.use(
+  (config) => config, // 쿠키로 인증 → Authorization 헤더 자동 추가 안 함
+  (error) => Promise.reject(error),
 );
 
-// Response interceptor
 axiosInstance.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
-    // Handle errors globally
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (!originalRequest) return Promise.reject(error);
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({
+            resolve: () => resolve(axiosInstance(originalRequest)),
+            reject,
+          });
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        await axios.post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true });
+        processQueue(null);
+        return axiosInstance(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError);
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
     if (error.response?.status === 401) {
-      // Handle unauthorized
-      localStorage.removeItem('token');
       window.location.href = '/login';
     }
+
     return Promise.reject(error);
   },
 );
