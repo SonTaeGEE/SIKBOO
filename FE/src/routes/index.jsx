@@ -2,6 +2,7 @@ import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { MainLayout } from '@/components/Layout';
 import Ingredients from '@/pages/Ingredient/Ingredients';
 import Recipes from '@/pages/Recipe/Recipes';
+import RecipeSessionDetail from '@/pages/Recipe/RecipeSessionDetail';
 import GroupBuying from '@/pages/GroupBuying/GroupBuying';
 import GroupBuyingDetail from '@/pages/GroupBuying/GroupBuyingDetail';
 import GroupBuyingChat from '@/pages/GroupBuying/GroupBuyingChat';
@@ -40,6 +41,9 @@ const AppRoutes = () => {
     if (location.pathname.startsWith('/ingredients')) {
       return { title: '내재료', showBack: false, hideNav: false };
     }
+    if (location.pathname.startsWith('/recipes/sessions/')) {
+      return { title: '레시피 상세', showBack: true, hideNav: false };
+    }
     if (location.pathname.startsWith('/recipes')) {
       return { title: '레시피', showBack: false, hideNav: false };
     }
@@ -72,6 +76,7 @@ const AppRoutes = () => {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/ingredients" element={<Ingredients />} />
         <Route path="/recipes" element={<Recipes />} />
+        <Route path="/recipes/sessions/:id" element={<RecipeSessionDetail />} />
         <Route path="/group-buying" element={<GroupBuying />} />
         <Route path="/group-buying/detail/:id" element={<GroupBuyingDetail />} />
         <Route path="/group-buying/detail/:id/chat" element={<GroupBuyingChat />} />
