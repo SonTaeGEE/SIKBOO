@@ -1,8 +1,15 @@
 import { useState } from 'react';
-import { Apple, Beef, Fish, Egg, Milk, Carrot, MapPin } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { MapPin } from 'lucide-react';
+
 import LocationPickerModal from '@/components/LocationPickerModal';
+import { useCreateGroupBuying } from '@/hooks/useGroupBuying';
+import { useCurrentUser } from '@/hooks/useUser';
+import { CATEGORY } from '@/constants/category';
+import { formatNumber } from '@/utils/formatter';
 
 const CreateGroupBuying = () => {
+  const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
@@ -10,20 +17,25 @@ const CreateGroupBuying = () => {
     name: '',
     totalPrice: '',
     maxParticipants: '',
-    quantity: '',
-    radius: '5',
     deadline: '',
     description: '',
   });
+  // 로그인한 사용자 ID 가져오기
+  const { data: currentUser } = useCurrentUser();
 
-  const categories = [
-    { id: 'fruit', icon: Apple, label: '과일', color: 'text-[#5f0080]' },
-    { id: 'vegetable', icon: Carrot, label: '채소', color: 'text-orange-600' },
-    { id: 'meat', icon: Beef, label: '육류', color: 'text-red-600' },
-    { id: 'seafood', icon: Fish, label: '수산물', color: 'text-blue-600' },
-    { id: 'dairy', icon: Milk, label: '유제품', color: 'text-sky-600' },
-    { id: 'etc', icon: Egg, label: '기타', color: 'text-yellow-600' },
-  ];
+  // 공동구매 생성 Mutation
+  const createMutation = useCreateGroupBuying();
+
+  // 성공/에러 처리
+  const handleMutationSuccess = (data) => {
+    alert('공동구매가 생성되었습니다!');
+    navigate(`/group-buying/detail/${data.groupBuyingId}`);
+  };
+
+  const handleMutationError = (error) => {
+    console.error('공동구매 생성 실패:', error);
+    alert(error.response?.data?.message || '공동구매 생성에 실패했습니다.');
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -33,16 +45,81 @@ const CreateGroupBuying = () => {
     }));
   };
 
+  // 입력 처리: totalPrice는 포맷 적용, maxParticipants는 숫자만 허용
+  const handleFormattedInputChange = (e) => {
+    const { name, value } = e.target;
+    if (name === 'totalPrice') {
+      setFormData((prev) => ({ ...prev, totalPrice: formatNumber(value) }));
+      return;
+    }
+    if (name === 'maxParticipants') {
+      // 숫자만 허용
+      const digits = String(value).replace(/\D/g, '');
+      setFormData((prev) => ({ ...prev, maxParticipants: digits }));
+      return;
+    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
   const handleLocationSelect = (location) => {
     setSelectedLocation(location);
   };
 
   const handleSubmit = () => {
-    // TODO: API 연동
-    console.log('공동구매 생성:', {
-      ...formData,
+    // 유효성 검사
+    if (!formData.name.trim()) {
+      alert('식재료명을 입력해주세요.');
+      return;
+    }
+    if (!selectedCategory) {
+      alert('카테고리를 선택해주세요.');
+      return;
+    }
+    // 숫자 파싱 (쉼표 제거)
+    const totalPriceNumber = parseInt(String(formData.totalPrice).replace(/\D/g, ''), 10) || 0;
+    const maxParticipantsNumber =
+      parseInt(String(formData.maxParticipants).replace(/\D/g, ''), 10) || 0;
+
+    if (totalPriceNumber <= 0) {
+      alert('총 금액을 입력해주세요.');
+      return;
+    }
+    if (maxParticipantsNumber <= 0) {
+      alert('최대 인원을 입력해주세요.');
+      return;
+    }
+    if (!selectedLocation) {
+      alert('수령 장소를 선택해주세요.');
+      return;
+    }
+    if (!formData.deadline) {
+      alert('마감 시간을 선택해주세요.');
+      return;
+    }
+
+    // API 요청 데이터 구성
+    if (!currentUser || !currentUser.id) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    const requestData = {
+      memberId: currentUser.id,
+      title: formData.name,
       category: selectedCategory,
-      location: selectedLocation,
+      totalPrice: totalPriceNumber,
+      maxPeople: maxParticipantsNumber,
+      info: formData.description,
+      pickupLocation: selectedLocation.address,
+      pickupLatitude: selectedLocation.lat,
+      pickupLongitude: selectedLocation.lng,
+      deadline: new Date(formData.deadline).toISOString(),
+    };
+
+    // Mutation 실행
+    createMutation.mutate(requestData, {
+      onSuccess: handleMutationSuccess,
+      onError: handleMutationError,
     });
   };
 
@@ -65,7 +142,7 @@ const CreateGroupBuying = () => {
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">카테고리</label>
             <div className="grid grid-cols-3 gap-2">
-              {categories.map((category) => {
+              {CATEGORY.map((category) => {
                 const Icon = category.icon;
                 const isSelected = selectedCategory === category.id;
                 return (
@@ -91,10 +168,11 @@ const CreateGroupBuying = () => {
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">총 금액</label>
               <input
-                type="number"
+                type="text"
                 name="totalPrice"
                 value={formData.totalPrice}
-                onChange={handleInputChange}
+                onChange={handleFormattedInputChange}
+                inputMode="numeric"
                 placeholder="50,000"
                 className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:ring-2 focus:ring-[#5f0080] focus:outline-none"
               />
@@ -102,26 +180,15 @@ const CreateGroupBuying = () => {
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">최대 인원</label>
               <input
-                type="number"
+                type="text"
                 name="maxParticipants"
                 value={formData.maxParticipants}
-                onChange={handleInputChange}
+                onChange={handleFormattedInputChange}
+                inputMode="numeric"
                 placeholder="5"
                 className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:ring-2 focus:ring-[#5f0080] focus:outline-none"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">총 수량</label>
-            <input
-              type="text"
-              name="quantity"
-              value={formData.quantity}
-              onChange={handleInputChange}
-              placeholder="예: 5kg 또는 10개"
-              className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:ring-2 focus:ring-[#5f0080] focus:outline-none"
-            />
           </div>
 
           <div>
@@ -180,9 +247,10 @@ const CreateGroupBuying = () => {
           <button
             type="button"
             onClick={handleSubmit}
-            className="w-full rounded-xl bg-[#5f0080] py-4 text-lg font-bold text-white transition hover:bg-[#4a0066]"
+            disabled={createMutation.isPending}
+            className="w-full rounded-xl bg-[#5f0080] py-4 text-lg font-bold text-white transition hover:bg-[#4a0066] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            공동구매 만들기
+            {createMutation.isPending ? '생성 중...' : '공동구매 만들기'}
           </button>
         </div>
 

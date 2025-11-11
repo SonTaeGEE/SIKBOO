@@ -1,21 +1,45 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Users, Clock, Plus, Search, ShoppingBag } from 'lucide-react';
-import { ingredients as initialItems, categories } from '../../data/ingredients';
-import { getTimeRemaining } from '../../lib/dateUtils';
+import { getTimeRemaining } from '@/lib/dateUtils';
 import { useKakaoMap } from '@/hooks/useKakaoMap';
+import { useActiveGroupBuyings, useMyParticipatingGroupBuyings } from '@/hooks/useGroupBuying';
+import { useCurrentUser } from '@/hooks/useUser';
 
 const GroupBuying = () => {
   const navigate = useNavigate();
   const { isLoaded } = useKakaoMap();
   const [location, setLocation] = useState('위치를 가져오는 중...');
+  const [currentPosition, setCurrentPosition] = useState(null); // { lat, lng }
   const [searchQuery, setSearchQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [activeTab, setActiveTab] = useState('recruiting'); // 'recruiting' or 'joined'
-  const [distanceFilter, setDistanceFilter] = useState('3'); // '1', '3', '5', '10'
+  const [distanceFilter, setDistanceFilter] = useState('5'); // '1', '3', '5', '7', '10'
 
-  // TODO: 실제로는 서버에서 가져와야 함
-  const myJoinedItemIds = [1, 3]; // 예시: 내가 참여한 공동구매 ID들
+  // 로그인한 사용자 정보 가져오기
+  const { data: currentUser } = useCurrentUser();
+
+  // 모집중인 공동구매 목록 조회 (recruiting 탭일 때만)
+  const { data: activeGroupBuyings = [], isLoading: isLoadingActive } = useActiveGroupBuyings({
+    enabled: activeTab === 'recruiting',
+  });
+
+  // 내가 참여한 공동구매 목록 조회 (joined 탭일 때만, currentUser가 있을 때만)
+  const { data: myParticipatingGroupBuyings = [], isLoading: isLoadingMy } =
+    useMyParticipatingGroupBuyings(currentUser?.id, {
+      enabled: activeTab === 'joined' && !!currentUser?.id,
+    });
+
+  // 카테고리 정의
+  const categories = [
+    { id: 'all', name: '전체', icon: '🛒' },
+    { id: 'FRUIT', name: '과일', icon: '🍎' },
+    { id: 'VEGETABLE', name: '채소', icon: '🥕' },
+    { id: 'MEAT', name: '육류', icon: '🥩' },
+    { id: 'SEAFOOD', name: '수산물', icon: '🐟' },
+    { id: 'DAIRY', name: '유제품', icon: '🥛' },
+    { id: 'ETC', name: '기타', icon: '🥚' },
+  ];
 
   // 현재 위치 가져오기
   useEffect(() => {
@@ -31,6 +55,9 @@ const GroupBuying = () => {
         (position) => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
+
+          // 현재 위치 저장
+          setCurrentPosition({ lat, lng });
 
           // 카카오맵 geocoder로 주소 변환
           const geocoder = new window.kakao.maps.services.Geocoder();
@@ -60,18 +87,56 @@ const GroupBuying = () => {
     getCurrentLocation();
   }, [isLoaded]);
 
-  const filteredItems = initialItems.filter((item) => {
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = category === 'all' || item.category === category;
-    const matchesTab =
-      activeTab === 'recruiting' ? item.status === 'recruiting' : myJoinedItemIds.includes(item.id);
+  // Haversine 공식을 이용한 거리 계산 (km 단위)
+  const calculateDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371; // 지구 반지름 (km)
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // km
+  };
 
-    // TODO: 실제로는 item.distance 같은 필드가 있어야 함
-    // 지금은 임시로 모든 아이템이 필터를 통과하도록 함
-    const matchesDistance = distanceFilter === 'all' || true;
+  // 현재 탭에 따라 데이터 선택
+  const currentItems =
+    activeTab === 'recruiting' ? activeGroupBuyings : myParticipatingGroupBuyings;
 
-    return matchesSearch && matchesCategory && matchesTab && matchesDistance;
-  });
+  // 필터링된 아이템 (거리 정보 포함)
+  const filteredItems = currentItems
+    .map((item) => {
+      // 거리 계산
+      let distance = null;
+      if (currentPosition && item.pickupLatitude && item.pickupLongitude) {
+        distance = calculateDistance(
+          currentPosition.lat,
+          currentPosition.lng,
+          item.pickupLatitude,
+          item.pickupLongitude,
+        );
+      }
+      return { ...item, distance };
+    })
+    .filter((item) => {
+      const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = category === 'all' || item.category === category;
+
+      // 거리 필터링
+      let matchesDistance = true;
+      if (item.distance !== null) {
+        const maxDistance = parseFloat(distanceFilter);
+        matchesDistance = item.distance <= maxDistance;
+      }
+
+      return matchesSearch && matchesCategory && matchesDistance;
+    });
+
+  // 로딩 상태
+  const isLoading = activeTab === 'recruiting' ? isLoadingActive : isLoadingMy;
 
   return (
     <div className="min-h-full">
@@ -156,31 +221,34 @@ const GroupBuying = () => {
         </div>
 
         {/* Distance Filter */}
-        <div className="mb-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-[#666666]">거리:</span>
-            <div className="flex gap-2">
-              {[
-                { id: '1', label: '1km' },
-                { id: '3', label: '3km' },
-                { id: '5', label: '5km' },
-                { id: '10', label: '10km' },
-              ].map((filter) => (
-                <button
-                  key={filter.id}
-                  onClick={() => setDistanceFilter(filter.id)}
-                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                    distanceFilter === filter.id
-                      ? 'bg-[#5f0080] text-white'
-                      : 'bg-gray-100 text-[#666666] hover:bg-gray-200'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
+        {activeTab === 'recruiting' && (
+          <div className="mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-[#666666]">거리:</span>
+              <div className="flex gap-2">
+                {[
+                  { id: '1', label: '1km' },
+                  { id: '3', label: '3km' },
+                  { id: '5', label: '5km' },
+                  { id: '7', label: '7km' },
+                  { id: '10', label: '10km' },
+                ].map((filter) => (
+                  <button
+                    key={filter.id}
+                    onClick={() => setDistanceFilter(filter.id)}
+                    className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                      distanceFilter === filter.id
+                        ? 'bg-[#5f0080] text-white'
+                        : 'bg-gray-100 text-[#666666] hover:bg-gray-200'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Product Grid - Kurly Style */}
         <div className="mb-4">
@@ -191,7 +259,11 @@ const GroupBuying = () => {
             </h3>
           </div>
 
-          {filteredItems.length === 0 ? (
+          {isLoading ? (
+            <div className="rounded-lg bg-gray-50 py-16 text-center">
+              <p className="text-sm text-gray-500">로딩 중...</p>
+            </div>
+          ) : filteredItems.length === 0 ? (
             <div className="rounded-lg bg-gray-50 py-16 text-center">
               <p className="text-sm text-gray-500">
                 {activeTab === 'recruiting'
@@ -201,68 +273,82 @@ const GroupBuying = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
-              {filteredItems.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => navigate(`/group-buying/detail/${item.id}`)}
-                  className="cursor-pointer overflow-hidden rounded-lg border border-[#e0e0e0] bg-white transition hover:shadow-lg"
-                >
-                  {/* Product Info */}
-                  <div className="p-4">
-                    <div className="mb-2 flex items-start justify-between">
-                      <h4 className="line-clamp-1 flex-1 text-sm font-medium text-[#333333]">
-                        {item.title}
-                      </h4>
-                      {item.status === 'recruiting' ? (
-                        <div className="ml-2 rounded-full bg-[#5f0080] px-2 py-0.5 text-xs font-medium whitespace-nowrap text-white">
-                          모집중
-                        </div>
-                      ) : (
-                        <div className="ml-2 rounded-full bg-[#999999] px-2 py-0.5 text-xs font-medium whitespace-nowrap text-white">
-                          마감
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mb-2 flex items-center gap-2 text-xs text-[#999999]">
-                      <MapPin size={11} />
-                      <span>{item.location}</span>
-                      <span>·</span>
-                      <span>{item.distance}km</span>
-                    </div>
-
-                    <div className="mb-2 flex items-center gap-3 text-xs">
-                      <div className="flex items-center gap-1 text-[#666666]">
-                        <Users size={13} className="text-[#5f0080]" />
-                        <span>
-                          {item.currentPeople}/{item.maxPeople}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 text-[#666666]">
-                        <Clock size={13} className="text-[#ff6b6b]" />
-                        <span>마감까지 {getTimeRemaining(item.deadlineDate)}</span>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-[#f4f4f4] pt-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="mb-0.5 text-xs text-[#999999] line-through">
-                            {item.price.toLocaleString()}원
+              {filteredItems.map((item) => {
+                return (
+                  <div
+                    key={item.groupBuyingId}
+                    onClick={() => navigate(`/group-buying/detail/${item.groupBuyingId}`)}
+                    className="cursor-pointer overflow-hidden rounded-lg border border-[#e0e0e0] bg-white transition hover:shadow-lg"
+                  >
+                    {/* Product Info */}
+                    <div className="p-4">
+                      <div className="mb-2 flex items-start justify-between">
+                        <h4 className="line-clamp-1 flex-1 text-lg font-medium text-[#333333]">
+                          {item.title}
+                        </h4>
+                        {item.status === '모집중' ? (
+                          <div className="ml-2 rounded-full bg-[#5f0080] px-2 py-0.5 text-xs font-medium whitespace-nowrap text-white">
+                            모집중
                           </div>
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-lg font-bold text-[#333333]">
-                              {item.pricePerPerson.toLocaleString()}
+                        ) : (
+                          <div className="ml-2 rounded-full bg-[#999999] px-2 py-0.5 text-xs font-medium whitespace-nowrap text-white">
+                            마감
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mb-2 flex items-center gap-2 text-xs text-[#999999]">
+                        <MapPin size={11} />
+                        <span>{item.pickupLocation}</span>
+                        {activeTab === 'recruiting' && (
+                          <>
+                            <span>·</span>
+                            <span>
+                              {item.distance !== null
+                                ? `${item.distance.toFixed(1)}km`
+                                : '거리 계산중'}
                             </span>
-                            <span className="text-xs text-[#666666]">원</span>
-                          </div>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="mb-2 flex items-center gap-3 text-xs">
+                        <div className="flex items-center gap-1 text-[#666666]">
+                          <Users size={13} className="text-[#5f0080]" />
+                          <span>
+                            {item.currentPeople}/{item.maxPeople}
+                          </span>
                         </div>
-                        <ShoppingBag size={18} className="text-[#5f0080]" />
+                        <div className="flex items-center gap-1 text-[#666666]">
+                          <Clock size={13} className="text-[#ff6b6b]" />
+                          {getTimeRemaining(item.deadline) === '마감' ? (
+                            <span>마감까지</span>
+                          ) : (
+                            <span>마감까지 {getTimeRemaining(item.deadline)}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="border-t border-[#f4f4f4] pt-2">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm text-gray-500">1인당 예상 가격</p>
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-2xl font-bold text-gray-900">
+                                {(item.totalPrice / item.maxPeople).toLocaleString()}원
+                              </span>
+                              <span className="text-sm text-gray-400 line-through">
+                                {item.totalPrice.toLocaleString()}원
+                              </span>
+                            </div>
+                          </div>
+                          <ShoppingBag size={18} className="text-[#5f0080]" />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

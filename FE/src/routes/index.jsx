@@ -26,10 +26,7 @@ const AppRoutes = () => {
     if (location.pathname === '/group-buying/create') {
       return { title: '식재료 공동구매 만들기', showBack: true, hideNav: false };
     }
-    if (
-      location.pathname.startsWith('/group-buying/detail/') &&
-      location.pathname.endsWith('/chat')
-    ) {
+    if (location.pathname.startsWith('/group-buying/') && location.pathname.endsWith('/chat')) {
       return { title: '채팅', showBack: true, hideNav: true };
     }
     if (location.pathname.startsWith('/group-buying/detail/')) {
@@ -79,7 +76,7 @@ const AppRoutes = () => {
         <Route path="/recipes/sessions/:id" element={<RecipeSessionDetail />} />
         <Route path="/group-buying" element={<GroupBuying />} />
         <Route path="/group-buying/detail/:id" element={<GroupBuyingDetail />} />
-        <Route path="/group-buying/detail/:id/chat" element={<GroupBuyingChat />} />
+        <Route path="/group-buying/:id/chat" element={<GroupBuyingChat />} />
         <Route path="/group-buying/create" element={<CreateGroupBuying />} />
         <Route path="/mypage" element={<MyPage />} />
       </Routes>

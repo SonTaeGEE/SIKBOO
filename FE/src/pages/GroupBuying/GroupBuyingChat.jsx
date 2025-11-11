@@ -11,7 +11,7 @@ const GroupBuyingChat = () => {
 
   if (!item) {
     return (
-      <div className="mx-auto min-h-screen max-w-2xl p-4">
+      <div className="mx-auto min-h-screen max-w-2xl bg-[#F9F5FF] p-4">
         <div className="py-20 text-center">
           <p className="text-gray-500">공동구매를 찾을 수 없습니다.</p>
           <button
@@ -26,7 +26,7 @@ const GroupBuyingChat = () => {
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-2xl flex-col bg-gray-50">
+    <div className="mx-auto flex h-full max-w-2xl flex-col bg-[#F9F5FF]">
       {/* Chat Messages */}
       <div className="flex-1 space-y-3 overflow-y-auto p-4 pb-24">
         {initialMessages.map((msg) => (
