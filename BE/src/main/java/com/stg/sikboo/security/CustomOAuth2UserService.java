@@ -1,4 +1,3 @@
-// ...existing code...
 package com.stg.sikboo.security;
 
 import com.stg.sikboo.member.domain.Member;
@@ -112,4 +111,3 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
     static Map<String, Object> map(Object o) { return (o instanceof Map<?, ?> m) ? (Map<String, Object>) m : null; }
   }
 }
-// ...existing code...

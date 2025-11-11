@@ -42,7 +42,7 @@ public class Ingredient {
 	 * 직렬화/역직렬화 오류가 없음
 	 */
 	@Enumerated(EnumType.STRING)
-	@Column(name = "location", nullable = false, columnDefinition = "ingredient_location")
+	@Column(name = "location", nullable = false, length = 50)
 	private IngredientLocation location;
 
 	/**

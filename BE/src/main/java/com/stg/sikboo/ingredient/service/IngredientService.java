@@ -162,9 +162,19 @@ public class IngredientService {
     }
 
     // 삭제
+//    public void delete(Long memberId, Long id) {
+//        Ingredient i = repo.findByIdAndMemberId(id, memberId).orElseThrow(NotFound::new);
+//        repo.delete(i);
+//    }
     public void delete(Long memberId, Long id) {
-        Ingredient i = repo.findByIdAndMemberId(id, memberId).orElseThrow(NotFound::new);
+        System.out.println("삭제 시도: memberId=" + memberId + ", ingredientId=" + id); // ★ 디버깅 로그
+        Ingredient i = repo.findByIdAndMemberId(id, memberId).orElseThrow(() -> {
+            System.err.println("레코드를 찾을 수 없음: ingredientId=" + id + ", memberId=" + memberId); // ★
+            return new NotFound();
+        });
+        System.out.println("삭제 대상: " + i.getIngredientName()); // ★
         repo.delete(i);
+        System.out.println("삭제 완료: ingredientId=" + id); // ★
     }
 
     // helpers

@@ -1,4 +1,4 @@
-import axiosInstance from '@/api/axiosInstance';
+import axiosInstance from './axiosInstance';
 
 /**
  * 재료 목록 조회
@@ -26,7 +26,12 @@ export async function deleteIngredient(id) {
  * 재료 생성
  */
 export async function createIngredient(body) {
-  // body: { ingredientName, location, due, memo, [quantity] }
   const res = await axiosInstance.post('/ingredients', body);
+  return res.data;
+}
+
+// 재료 수정
+export async function updateIngredient(id, body) {
+  const res = await axiosInstance.patch(`/ingredients/${id}`, body); // ★ PUT → PATCH 변경
   return res.data;
 }

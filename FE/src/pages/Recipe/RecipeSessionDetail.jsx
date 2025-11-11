@@ -1,0 +1,91 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams } from 'react-router-dom';
+import SectionTitle from '@/components/Recipe/SectionTitle';
+import Skeleton from '@/components/Recipe/Skeleton';
+import Empty from '@/components/Recipe/Empty';
+import ErrorBox from '@/components/Recipe/ErrorBox';
+import RecipeCard from '@/components/Recipe/RecipeCard';
+import recipeApi from '@/api/recipeApi';
+
+const qKeys = {
+  sessionDetail: (id) => ['recipes', 'session', id],
+};
+
+export default function RecipeSessionDetail() {
+  const { id } = useParams();
+  const qc = useQueryClient();
+
+  const detail = useQuery({
+    queryKey: qKeys.sessionDetail(id),
+    queryFn: () => recipeApi.getSessionDetail(id),
+  });
+
+  const moreHave = useMutation({
+    mutationFn: () => recipeApi.recommendMore(id, 'have'),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qKeys.sessionDetail(id) }),
+  });
+
+  const moreNeed = useMutation({
+    mutationFn: () => recipeApi.recommendMore(id, 'need'),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qKeys.sessionDetail(id) }),
+  });
+
+  if (detail.isLoading) return <Skeleton />;
+  if (detail.isError) return <ErrorBox error={detail.error} />;
+
+  const { title, have = [], need = [] } = detail.data || {};
+
+  return (
+    <div className="mx-auto min-h-[100dvh] w-full max-w-full bg-[#F8F3FF] px-4 pt-3 pb-[88px] md:max-w-screen-md md:px-6 lg:max-w-4xl lg:px-8">
+      <h1 className="mb-2 text-lg font-bold">{title}</h1>
+
+      {/* 있는 식재료로 만든 레시피 */}
+      <SectionTitle>있는 식재료로 만든 레시피</SectionTitle>
+      {have.length === 0 ? (
+        <Empty text="조건에 맞는 레시피가 없어요." />
+      ) : (
+        <div className="space-y-3">
+          {have.map((r) => (
+            <RecipeCard key={r.id} r={r} />
+          ))}
+        </div>
+      )}
+      <div className="my-5 flex justify-center">
+        <button
+          onClick={() => moreHave.mutate()}
+          disabled={moreHave.isPending}
+          className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-4 py-2 text-indigo-700 disabled:opacity-60"
+        >
+          {moreHave.isPending && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+          )}
+          다른 레시피 추천받기!
+        </button>
+      </div>
+
+      {/* 식재료가 필요한 레시피 */}
+      <SectionTitle>식재료가 필요한 레시피</SectionTitle>
+      {need.length === 0 ? (
+        <Empty text="추가 식재료가 필요한 레시피가 없어요." />
+      ) : (
+        <div className="mb-10 space-y-3">
+          {need.map((r) => (
+            <RecipeCard key={r.id} r={r} />
+          ))}
+        </div>
+      )}
+      <div className="my-5 flex justify-center">
+        <button
+          onClick={() => moreNeed.mutate()}
+          disabled={moreNeed.isPending}
+          className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-4 py-2 text-indigo-700 disabled:opacity-60"
+        >
+          {moreNeed.isPending && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+          )}
+          다른 레시피 추천받기!
+        </button>
+      </div>
+    </div>
+  );
+}

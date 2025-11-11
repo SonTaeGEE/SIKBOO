@@ -36,7 +36,7 @@ const OAuth2Success = () => {
           window.history.replaceState({}, '', cleanUrl);
         }
 
-        // 2) ✅ 세션/쿠키 기반 확인: 반드시 authClient( withCredentials:true )
+        // 2) 세션/쿠키 기반 확인: 반드시 authClient( withCredentials:true )
         await getMe();
 
         // 3) 성공 → 메인으로

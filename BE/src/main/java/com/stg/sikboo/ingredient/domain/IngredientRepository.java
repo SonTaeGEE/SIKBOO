@@ -18,7 +18,7 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
         SELECT i.*
         FROM ingredient i
         WHERE i.member_id = :memberId
-          AND (:location IS NULL OR i.location::text = :location)
+          AND (:location IS NULL OR i.location = :location)
           AND (:q IS NULL OR lower(i.ingredient_name) LIKE lower(concat('%', :q, '%')))
       	ORDER BY i.due ASC, i.ingredient_name ASC
       """,
@@ -26,7 +26,7 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
         SELECT count(*)
         FROM ingredient i
         WHERE i.member_id = :memberId
-          AND (:location IS NULL OR i.location::text = :location)
+          AND (:location IS NULL OR i.location = :location)
           AND (:q IS NULL OR lower(i.ingredient_name) LIKE lower(concat('%', :q, '%')))
       """,
       nativeQuery = true
@@ -46,7 +46,7 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
         SELECT i.*
         FROM ingredient i
         WHERE i.member_id = :memberId
-          AND i.location::text = :location
+          AND i.location = :location
           AND i.due >= :start AND i.due < :end
       """,
       nativeQuery = true
