@@ -27,8 +27,7 @@ public class GroupBuyingUpdateRequest {
     @Positive(message = "최대 인원은 양수여야 합니다")
     private Integer maxPeople;
     
-    @Positive(message = "수량은 양수여야 합니다")
-    private Integer quantity;
+    private String info;
     
     private String pickupLocation;
     

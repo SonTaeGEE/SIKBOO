@@ -36,10 +36,6 @@ public class GroupBuyingCreateRequest {
     @Positive(message = "최대 인원은 양수여야 합니다")
     private Integer maxPeople;
     
-    @NotNull(message = "수량은 필수입니다")
-    @Positive(message = "수량은 양수여야 합니다")
-    private Integer quantity;
-    
     @NotBlank(message = "픽업 장소는 필수입니다")
     private String pickupLocation;
     
@@ -51,4 +47,6 @@ public class GroupBuyingCreateRequest {
     
     @NotNull(message = "마감 시간은 필수입니다")
     private LocalDateTime deadline;
+    
+    private String info;
 }

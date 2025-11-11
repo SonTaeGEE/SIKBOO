@@ -60,13 +60,14 @@ public class GroupBuying {
 
     @Column(name = "max_people", nullable = false)
     private Integer maxPeople;
+    
+    @Column(name = "info", nullable = true)
+    private String info;
 
+    // currentPeople은 DB 컬럼이지만, participants 리스트의 크기로 자동 계산
     @Column(name = "current_people", nullable = false)
     private Integer currentPeople;
-
-    @Column(name = "quantity", nullable = false)
-    private Integer quantity;
-
+    
     @Column(name = "pickup_location", nullable = false, length = 255)
     private String pickupLocation;
 
@@ -97,6 +98,11 @@ public class GroupBuying {
     @Builder.Default
     private List<Participant> participants = new ArrayList<>();
 
+    // 실제 참여자 수를 계산하는 메서드 (participants 리스트 기반)
+    public Integer calculateCurrentPeople() {
+        return this.participants != null ? this.participants.size() : 0;
+    }
+    
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -112,6 +118,14 @@ public class GroupBuying {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+        // participants 리스트 기반으로 currentPeople 자동 동기화
+        this.currentPeople = calculateCurrentPeople();
+        // 상태 자동 업데이트
+        if (this.currentPeople >= this.maxPeople) {
+            this.status = Status.마감;
+        } else if (this.status == Status.마감) {
+            this.status = Status.모집중;
+        }
     }
 
     public enum Category {
@@ -131,7 +145,7 @@ public class GroupBuying {
     }
 
     public void decreaseCurrentPeople() {
-        if (this.currentPeople > 0) {
+        if (this.currentPeople > 1) {
             this.currentPeople--;
             if (this.status == Status.마감) {
                 this.status = Status.모집중;

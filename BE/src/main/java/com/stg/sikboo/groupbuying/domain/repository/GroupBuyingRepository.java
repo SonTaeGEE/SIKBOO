@@ -16,15 +16,6 @@ import com.stg.sikboo.groupbuying.domain.GroupBuying.Status;
  */
 public interface GroupBuyingRepository extends JpaRepository<GroupBuying, Long> {
     
-    @Override
-	GroupBuying save(GroupBuying groupBuying);
-    
-    @Override
-	Optional<GroupBuying> findById(Long id);
-    
-    @Override
-	List<GroupBuying> findAll();
-    
     List<GroupBuying> findByStatus(Status status);
     
     List<GroupBuying> findByCategory(Category category);
@@ -36,13 +27,4 @@ public interface GroupBuyingRepository extends JpaRepository<GroupBuying, Long> 
     List<GroupBuying> findByDeadlineAfter(LocalDateTime deadline);
     
     List<GroupBuying> findByStatusAndDeadlineAfter(Status status, LocalDateTime deadline);
-    
-    @Override
-	void delete(GroupBuying groupBuying);
-    
-    @Override
-	void deleteById(Long id);
-    
-    @Override
-	boolean existsById(Long id);
 }

@@ -44,7 +44,7 @@ public class GroupBuyingController {
      * 공동구매 단건 조회
      */
     @GetMapping("/{id}")
-    public ResponseEntity<GroupBuyingResponse> getGroupBuying(@PathVariable Long id) {
+    public ResponseEntity<GroupBuyingResponse> getGroupBuying(@PathVariable("id") Long id) {
         GroupBuyingResponse response = groupBuyingService.getGroupBuying(id);
         return ResponseEntity.ok(response);
     }
@@ -72,7 +72,7 @@ public class GroupBuyingController {
      */
     @GetMapping("/category/{category}")
     public ResponseEntity<List<GroupBuyingResponse>> getGroupBuyingsByCategory(
-            @PathVariable Category category) {
+            @PathVariable("category") Category category) {
         List<GroupBuyingResponse> responses = groupBuyingService.getGroupBuyingsByCategory(category);
         return ResponseEntity.ok(responses);
     }
@@ -82,7 +82,7 @@ public class GroupBuyingController {
      */
     @GetMapping("/my")
     public ResponseEntity<List<GroupBuyingResponse>> getMyGroupBuyings(
-            @RequestParam Long memberId) {
+            @RequestParam("memberId") Long memberId) {
         List<GroupBuyingResponse> responses = groupBuyingService.getMyGroupBuyings(memberId);
         return ResponseEntity.ok(responses);
     }
@@ -92,7 +92,7 @@ public class GroupBuyingController {
      */
     @PutMapping("/{id}")
     public ResponseEntity<GroupBuyingResponse> updateGroupBuying(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody GroupBuyingUpdateRequest request) {
         GroupBuyingResponse response = groupBuyingService.updateGroupBuying(id, request);
         return ResponseEntity.ok(response);
@@ -102,26 +102,9 @@ public class GroupBuyingController {
      * 공동구매 삭제
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteGroupBuying(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteGroupBuying(@PathVariable("id") Long id) {
         groupBuyingService.deleteGroupBuying(id);
         return ResponseEntity.noContent().build();
     }
     
-    /**
-     * 공동구매 참여
-     */
-    @PostMapping("/{id}/join")
-    public ResponseEntity<GroupBuyingResponse> joinGroupBuying(@PathVariable Long id) {
-        GroupBuyingResponse response = groupBuyingService.joinGroupBuying(id);
-        return ResponseEntity.ok(response);
-    }
-    
-    /**
-     * 공동구매 나가기
-     */
-    @PostMapping("/{id}/leave")
-    public ResponseEntity<GroupBuyingResponse> leaveGroupBuying(@PathVariable Long id) {
-        GroupBuyingResponse response = groupBuyingService.leaveGroupBuying(id);
-        return ResponseEntity.ok(response);
-    }
 }

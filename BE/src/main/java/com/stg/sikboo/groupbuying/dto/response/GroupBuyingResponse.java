@@ -25,8 +25,8 @@ public class GroupBuyingResponse {
     private Category category;
     private Integer totalPrice;
     private Integer maxPeople;
+    private String info;
     private Integer currentPeople;
-    private Integer quantity;
     private String pickupLocation;
     private BigDecimal pickupLatitude;
     private BigDecimal pickupLongitude;
@@ -44,8 +44,8 @@ public class GroupBuyingResponse {
                 .category(groupBuying.getCategory())
                 .totalPrice(groupBuying.getTotalPrice())
                 .maxPeople(groupBuying.getMaxPeople())
+                .info(groupBuying.getInfo())
                 .currentPeople(groupBuying.getCurrentPeople())
-                .quantity(groupBuying.getQuantity())
                 .pickupLocation(groupBuying.getPickupLocation())
                 .pickupLatitude(groupBuying.getPickupLatitude())
                 .pickupLongitude(groupBuying.getPickupLongitude())

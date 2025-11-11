@@ -16,6 +16,8 @@ import com.stg.sikboo.groupbuying.dto.request.GroupBuyingUpdateRequest;
 import com.stg.sikboo.groupbuying.dto.response.GroupBuyingResponse;
 import com.stg.sikboo.member.domain.Member;
 import com.stg.sikboo.member.domain.MemberRepository;
+import com.stg.sikboo.participant.domain.Participant;
+import com.stg.sikboo.participant.domain.repository.ParticipantRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -26,9 +28,11 @@ public class GroupBuyingService {
     
     private final GroupBuyingRepository groupBuyingRepository;
     private final MemberRepository memberRepository;
+    private final ParticipantRepository participantRepository;
     
     /**
      * 공동구매 생성
+     * 생성 시 주최자가 자동으로 참여자로 등록됩니다.
      */
     @Transactional
     public GroupBuyingResponse createGroupBuying(GroupBuyingCreateRequest request) {
@@ -41,8 +45,8 @@ public class GroupBuyingService {
                 .category(request.getCategory())
                 .totalPrice(request.getTotalPrice())
                 .maxPeople(request.getMaxPeople())
-                .currentPeople(0)
-                .quantity(request.getQuantity())
+                .currentPeople(0) 
+                .info(request.getInfo())
                 .pickupLocation(request.getPickupLocation())
                 .pickupLatitude(request.getPickupLatitude())
                 .pickupLongitude(request.getPickupLongitude())
@@ -51,6 +55,15 @@ public class GroupBuyingService {
                 .build();
         
         GroupBuying saved = groupBuyingRepository.save(groupBuying);
+        
+        // 주최자를 참여자 목록에 자동 추가
+        Participant participant = Participant.builder()
+                .groupBuying(saved)
+                .member(member)
+                .build();
+        
+        participantRepository.save(participant);
+        
         return GroupBuyingResponse.from(saved);
     }
     
@@ -64,38 +77,42 @@ public class GroupBuyingService {
     }
     
     /**
-     * 전체 공동구매 목록 조회
+     * 전체 공동구매 목록 조회 (최신순)
      */
     public List<GroupBuyingResponse> getAllGroupBuyings() {
         return groupBuyingRepository.findAll().stream()
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .map(GroupBuyingResponse::from)
                 .collect(Collectors.toList());
     }
     
     /**
-     * 모집중인 공동구매 목록 조회
+     * 모집중인 공동구매 목록 조회 (최신순)
      */
     public List<GroupBuyingResponse> getActiveGroupBuyings() {
         LocalDateTime now = LocalDateTime.now();
         return groupBuyingRepository.findByStatusAndDeadlineAfter(Status.모집중, now).stream()
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .map(GroupBuyingResponse::from)
                 .collect(Collectors.toList());
     }
     
     /**
-     * 카테고리별 공동구매 목록 조회
+     * 카테고리별 공동구매 목록 조회 (최신순)
      */
     public List<GroupBuyingResponse> getGroupBuyingsByCategory(Category category) {
         return groupBuyingRepository.findByCategory(category).stream()
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .map(GroupBuyingResponse::from)
                 .collect(Collectors.toList());
     }
     
     /**
-     * 내가 만든 공동구매 목록 조회
+     * 내가 만든 공동구매 목록 조회 (최신순)
      */
     public List<GroupBuyingResponse> getMyGroupBuyings(Long memberId) {
         return groupBuyingRepository.findByMember_Id(memberId).stream()
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .map(GroupBuyingResponse::from)
                 .collect(Collectors.toList());
     }
@@ -125,31 +142,4 @@ public class GroupBuyingService {
         groupBuyingRepository.deleteById(id);
     }
     
-    /**
-     * 공동구매 참여 (참여자 수 증가)
-     */
-    @Transactional
-    public GroupBuyingResponse joinGroupBuying(Long id) {
-        GroupBuying groupBuying = groupBuyingRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 공동구매입니다."));
-        
-        if (groupBuying.getStatus() == Status.마감) {
-            throw new IllegalStateException("이미 마감된 공동구매입니다.");
-        }
-        
-        groupBuying.increaseCurrentPeople();
-        return GroupBuyingResponse.from(groupBuying);
-    }
-    
-    /**
-     * 공동구매 나가기 (참여자 수 감소)
-     */
-    @Transactional
-    public GroupBuyingResponse leaveGroupBuying(Long id) {
-        GroupBuying groupBuying = groupBuyingRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 공동구매입니다."));
-        
-        groupBuying.decreaseCurrentPeople();
-        return GroupBuyingResponse.from(groupBuying);
-    }
 }
