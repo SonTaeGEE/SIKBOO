@@ -24,3 +24,19 @@ export const getMe = async () => {
   const res = await axiosInstance.get('/auth/me');
   return res.data; // { id, name, role, ... }
 };
+
+/**
+ * 사전설문 제출 (프로필 + 재료)
+ */
+export const submitOnboarding = async (data) => {
+  const res = await axiosInstance.post('/onboarding', data);
+  return res.data;
+};
+
+/**
+ * 사전설문 건너뛰기
+ */
+export const skipOnboarding = async () => {
+  const res = await axiosInstance.post('/onboarding/skip');
+  return res.data;
+};

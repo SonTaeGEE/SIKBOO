@@ -1,5 +1,21 @@
 import axiosInstance from '@/api/axiosInstance';
 
+/**
+ * 내 프로필 조회
+ */
+export const getMyProfile = async () => {
+  const res = await axiosInstance.get('/members/me/profile');
+  return res.data;
+};
+
+/**
+ * 내 프로필 수정
+ */
+export const updateMyProfile = async (data) => {
+  const res = await axiosInstance.put('/members/me/profile', data);
+  return res.data;
+};
+
 // 사용자 CRUD
 export const fetchUsers = async () => {
   const response = await axiosInstance.get('/users');
