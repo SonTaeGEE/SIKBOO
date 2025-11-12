@@ -1,28 +1,32 @@
 package com.stg.sikboo.recipe.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stg.sikboo.recipe.domain.Recipe;
 import com.stg.sikboo.recipe.domain.repository.RecipeRepository;
 import com.stg.sikboo.recipe.dto.request.RecipeGenerateRequest;
 import com.stg.sikboo.recipe.dto.response.RecipeSuggestionResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Array;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class RecipeService {
 
     private final RecipeRepository recipeRepository;
     private final NamedParameterJdbcTemplate jdbc;
     private final ChatClient chat; // Spring AI
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper;
 
     public RecipeService(
             RecipeRepository recipeRepository,
@@ -32,6 +36,8 @@ public class RecipeService {
         this.recipeRepository = recipeRepository;
         this.jdbc = jdbc;
         this.chat = chatClient;
+        this.mapper = new ObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
     // ---------------- In-memory 캐시(현재 UI용) ----------------
@@ -39,6 +45,11 @@ public class RecipeService {
     private final Map<Long, AiResponse> lastAiResponse = new ConcurrentHashMap<>();
     private final Map<Long, Set<String>> generatedTitlesHave = new ConcurrentHashMap<>();
     private final Map<Long, Set<String>> generatedTitlesNeed = new ConcurrentHashMap<>();
+
+    // 기본 재료(need에 절대 들어가면 안 되는 키워드)
+    private static final Set<String> BASIC_ALWAYS_HAVE = Set.of(
+            "밥", "흰쌀밥", "쌀", "백미", "물", "정수"
+    );
 
     // ---------- 내 재료 목록 조회 ----------
     public List<Map<String, Object>> findMyIngredients(Long memberId) {
@@ -78,17 +89,48 @@ public class RecipeService {
         return names.stream().map(String::trim).collect(Collectors.toSet());
     }
 
+    // ---------- 회원 질병/알레르기 조회 ----------
+    private Health getMemberHealth(Long memberId) {
+        String sql = """
+                SELECT diseases, allergies
+                FROM member
+                WHERE member_id = :memberId
+                """;
+        try {
+            return jdbc.queryForObject(sql, Map.of("memberId", memberId), (rs, i) -> {
+                Set<String> dis = new HashSet<>();
+                Set<String> al = new HashSet<>();
+                Array dArr = rs.getArray("diseases");
+                if (dArr != null) {
+                    Object[] a = (Object[]) dArr.getArray();
+                    for (Object v : a) if (v != null) dis.add(v.toString().trim());
+                }
+                Array aArr = rs.getArray("allergies");
+                if (aArr != null) {
+                    Object[] a = (Object[]) aArr.getArray();
+                    for (Object v : a) if (v != null) al.add(v.toString().trim());
+                }
+                return new Health(dis, al);
+            });
+        } catch (Exception e) {
+            log.info("[HEALTH] memberId={} 건강정보 조회 없음/실패: {}", memberId, e.toString());
+            return new Health(Set.of(), Set.of());
+        }
+    }
+
     // ---------- 레시피 생성(캐시 + 세션 저장) ----------
     @Transactional
     public Map<String, Object> generateRecipes(RecipeGenerateRequest req) {
         Long memberId = (req.memberId() != null) ? req.memberId() : 1L;
 
         Set<String> selectedNames = getIngredientNames(memberId, req.ingredientIds());
+        Health health = getMemberHealth(memberId);
+
         lastSelectedByMember.put(memberId, selectedNames);
         generatedTitlesHave.put(memberId, new HashSet<>());
         generatedTitlesNeed.put(memberId, new HashSet<>());
 
-        AiResponse ai = callAi(memberId, selectedNames, Set.of(), Set.of());
+        AiResponse ai = callAi(memberId, selectedNames, Set.of(), Set.of(), health);
         lastAiResponse.put(memberId, ai);
 
         String haveTitle = ai.have.isEmpty() ? null : ai.have.get(0).title;
@@ -109,7 +151,8 @@ public class RecipeService {
         try {
             payload = mapper.writeValueAsString(ai);
         } catch (Exception e) {
-            payload = "{\"have\":[],\"need\":[]}";
+            log.warn("[AI] serialize 실패: {}", e.toString());
+            payload = "{\"notice\":\"\",\"have\":[],\"need\":[]}";
         }
 
         Recipe e = new Recipe();
@@ -141,36 +184,106 @@ public class RecipeService {
         return base.stream().map(this::toSuggestion).toList();
     }
 
-    // ---------- 다른 레시피 추천 ----------
-    public void recommendMore(Long memberId, String filter) {
+    // ---------- 다른 레시피 추천 (세션 DB 반영) ----------
+    @Transactional
+    public void recommendMore(Long memberId, Long sessionId, String filter) {
         Set<String> selected = lastSelectedByMember.get(memberId);
         if (selected == null || selected.isEmpty()) return;
 
         Set<String> avoidHave = generatedTitlesHave.computeIfAbsent(memberId, k -> new HashSet<>());
         Set<String> avoidNeed = generatedTitlesNeed.computeIfAbsent(memberId, k -> new HashSet<>());
+        Health health = getMemberHealth(memberId);
 
-        AiResponse aiNew = callAi(memberId, selected, avoidHave, avoidNeed);
+        AiResponse aiNew = callAi(memberId, selected, avoidHave, avoidNeed, health);
         AiResponse current = lastAiResponse.getOrDefault(memberId, new AiResponse());
 
-        if (filter == null || "have".equalsIgnoreCase(filter)) current.have.addAll(aiNew.have);
-        if (filter == null || "need".equalsIgnoreCase(filter)) current.need.addAll(aiNew.need);
+        // ★ 각 섹션당 1개만 추가 (속도 개선)
+        if (filter == null || "have".equalsIgnoreCase(filter)) {
+            if (!aiNew.have.isEmpty()) current.have.add(aiNew.have.get(0));
+        }
+        if (filter == null || "need".equalsIgnoreCase(filter)) {
+            if (!aiNew.need.isEmpty()) current.need.add(aiNew.need.get(0));
+        }
 
         lastAiResponse.put(memberId, current);
 
         avoidHave.addAll(
-                aiNew.have.stream().map(r -> r.title).filter(Objects::nonNull).toList()
+                current.have.stream().map(r -> r.title).filter(Objects::nonNull).toList()
         );
         avoidNeed.addAll(
-                aiNew.need.stream().map(r -> r.title).filter(Objects::nonNull).toList()
+                current.need.stream().map(r -> r.title).filter(Objects::nonNull).toList()
         );
+
+        // ★ 세션 detail JSON도 갱신/저장 → 상세 재조회 시 반영되도록
+        Recipe session = recipeRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 세션"));
+        if (!Objects.equals(session.getMemberId(), memberId)) {
+            throw new IllegalArgumentException("본인 세션만 갱신할 수 있습니다.");
+        }
+        try {
+            String payload = mapper.writeValueAsString(current);
+            session.setDetail(payload);
+            recipeRepository.save(session);
+        } catch (Exception e) {
+            log.warn("[AI] recommendMore serialize 실패: {}", e.toString());
+        }
     }
 
     // ---------- Spring AI 호출 ----------
-    private AiResponse callAi(Long memberId, Set<String> haveNow, Set<String> avoidHave, Set<String> avoidNeed) {
+    private AiResponse callAi(Long memberId,
+                              Set<String> haveNow,
+                              Set<String> avoidHave,
+                              Set<String> avoidNeed,
+                              Health health) {
         try {
-            String prompt = buildPrompt(haveNow, avoidHave, avoidNeed);
-            String json = chat.prompt().user(prompt).call().content();
+            String prompt = buildPrompt(haveNow, avoidHave, avoidNeed, health);
+
+            String raw = chat.prompt()
+                    .system("""
+                            당신은 레시피 생성기입니다.
+                            반드시 **JSON만** 반환하세요. 마크다운/설명/코드펜스 금지.
+                            JSON 이외의 문자는 출력하지 마세요.
+                            """)
+                    .user(prompt)
+                    // temperature 는 application 설정 사용
+                    .call()
+                    .content();
+
+            String snippet = raw == null ? "null" :
+                    (raw.length() > 2000 ? raw.substring(0, 2000) + "...(truncated)" : raw);
+            log.info("[AI] raw length={} snippet=\n{}", raw == null ? 0 : raw.length(), snippet);
+
+            String json = extractJson(raw);
+            if (json == null || json.isBlank()) {
+                log.warn("[AI] JSON 추출 실패.");
+                return new AiResponse();
+            }
+
             AiResponse res = mapper.readValue(json, AiResponse.class).sanitize();
+
+            // 서버측 정규화 + 기본 재료 need 금지 강제
+            for (AiRecipe r : res.have) {
+                if (r.ingredients == null) r.ingredients = new Ingredients();
+                r.ingredients.have = normalize(r.ingredients.have);
+                r.ingredients.need = new ArrayList<>();
+                r.ingredients.seasoning = normalize(r.ingredients.seasoning);
+            }
+            for (AiRecipe r : res.need) {
+                if (r.ingredients == null) r.ingredients = new Ingredients();
+                List<String> usedHave = normalize(r.ingredients.have);
+                List<String> needs = normalize(r.ingredients.need);
+
+                // 기본 재료(밥/물 등)는 need에서 제거
+                needs.removeIf(this::isBasicAlwaysHave);
+
+                // 보유/이미 사용한 것과 겹치지 않도록
+                needs.removeIf(haveNow::contains);
+                needs.removeIf(usedHave::contains);
+
+                r.ingredients.have = usedHave;
+                r.ingredients.need = needs;
+                r.ingredients.seasoning = normalize(r.ingredients.seasoning);
+            }
 
             generatedTitlesHave
                     .computeIfAbsent(memberId, k -> new HashSet<>())
@@ -182,31 +295,122 @@ public class RecipeService {
 
             return res;
         } catch (Exception e) {
-            return fallbackFrom(haveNow);
+            log.warn("[AI] call/parse 실패: {}", e.toString());
+            return new AiResponse();
         }
     }
 
-    private String buildPrompt(Set<String> haveNow, Set<String> avoidHave, Set<String> avoidNeed) {
+    /** 모델이 코드펜스/설명 섞어 보낼 때를 대비해 JSON만 뽑아낸다 */
+    private static String extractJson(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim();
+        if (s.startsWith("```")) {
+            int first = s.indexOf('{');
+            int last = s.lastIndexOf('}');
+            if (first >= 0 && last > first) return s.substring(first, last + 1).trim();
+        }
+        int first = s.indexOf('{');
+        int last = s.lastIndexOf('}');
+        if (first >= 0 && last > first) return s.substring(first, last + 1).trim();
+        if (s.startsWith("\"") && s.endsWith("\"")) {
+            String unq = s.substring(1, s.length() - 1)
+                    .replace("\\n", "\n")
+                    .replace("\\t", "\t")
+                    .replace("\\\"", "\"");
+            int f = unq.indexOf('{');
+            int l = unq.lastIndexOf('}');
+            if (f >= 0 && l > f) return unq.substring(f, l + 1).trim();
+        }
+        return null;
+    }
+
+    /** 가변 리스트 보장 */
+    private static List<String> normalize(List<String> src) {
+        if (src == null) return new ArrayList<>();
+        List<String> cleaned = src.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        return new ArrayList<>(cleaned);
+    }
+
+    // 기본 재료(need 금지) 판별
+    private boolean isBasicAlwaysHave(String s) {
+        if (s == null) return false;
+        String t = s.replace(" ", "").trim();
+        for (String key : BASIC_ALWAYS_HAVE) {
+            if (t.contains(key)) return true; // '정수물', '흰쌀밥' 등 포함 대응
+        }
+        return false;
+    }
+
+    private String buildPrompt(Set<String> haveNow,
+                               Set<String> avoidHave,
+                               Set<String> avoidNeed,
+                               Health health) {
+        String diseasesStr  = health.diseases.isEmpty()  ? "없음" : String.join(", ", health.diseases);
+        String allergiesStr = health.allergies.isEmpty() ? "없음" : String.join(", ", health.allergies);
+
         return """
-                당신은 요리 레시피 어시스턴트입니다. 반드시 아래 JSON 스키마로만 응답하세요.
+                당신은 **세계 각국의 가정식/일상 요리 전반**을 잘 아는 레시피 어시스턴트입니다.
+                **반드시 JSON만** 출력하고, 그 외 텍스트/설명/마크다운은 금지합니다.
 
-                사용자 보유 재료(haveNow): %s
+                [사용자 보유 재료(haveNow)]
+                %s
 
-                아래 제목과 겹치지 않도록 새로운 레시피만 제안하세요.
-                - 이미 제안된 have 레시피 제목: %s
-                - 이미 제안된 need 레시피 제목: %s
+                [사용자 건강 정보]
+                - 지병(diseases): %s
+                - 알레르기(allergies): %s
+                - 위 정보가 '없음'이면 건강 제한을 적용하지 않습니다. 값이 있으면 해당 식재료·소스·조리법을 배제하고 안전한 대안을 제시하세요.
 
-                출력 형식(JSON):
+                [금지 규칙(매우 중요)]
+                - 건강 정보와 **직접/간접적으로 연관된** 모든 재료/소스/토핑/조리법은 **전부 제외**합니다.
+                - 판단이 불확실하면 **보수적으로 제외**합니다.
+                - 금지 재료는 ingredients.have/need/seasoning 어디에도 넣지 않습니다.
+
+                [가정(항상 보유)]
+                - 밥(흰쌀밥), 물
+                - 기본 재료(= 흔히 갖춘 베이스): 소금, 설탕, 간장, 식용유, 참기름, 후추, 고춧가루, 다진마늘, 밀가루(또는 전분)
+                  → 이 항목들은 need에 넣지 말고 **ingredients.seasoning = '기본 재료'** 목록에만 기입합니다.
+                  → **특히 '밥/흰쌀밥/쌀/물'은 need에 절대 넣지 마세요.** 물은 필요 시 seasoning(예: "물 120ml")로만 표기합니다.
+                  → **약어 금지:** '1t/1T' 대신 **'1작은술/1큰술'**로 표기하고, ml/g 단위는 숫자+단위로 적습니다.
+                  → 저염/당 조절 등 건강 정보가 있으면 사용량을 낮추거나 대안을 steps에 명시합니다.
+
+                [이미 제안된 제목(중복 금지)]
+                - have: %s
+                - need: %s
+
+                [생성 규칙]
+                1) "have": haveNow만 사용해서 가능한 레시피 **정확히 3개**.
+                   - ingredients.have: haveNow 중 실제 사용한 항목(중복 금지).
+                   - ingredients.need: [] (항상 빈 배열)
+                   - seasoning: 예) "간장 1큰술", "설탕 1작은술", "물 120ml", "올리브유 1큰술"
+                2) "need": haveNow를 기반으로 **추가 재료 1~3개**만 더해 가능한 레시피 **정확히 3개**.
+                   - ingredients.have: haveNow 중 실제 사용한 항목(중복 금지).
+                   - ingredients.need: haveNow와 겹치지 않는 1~3개(금지 재료 금지, **'밥/쌀/물' 포함 금지**).
+                   - seasoning: 위와 동일한 표기 규칙(작은술/큰술).
+                3) **실재하는 레시피(혹은 합리적 변형)**만 제안합니다. 과장되거나 비현실적 조합 금지, 제목은 간결한 한국어.
+                4) steps는 **7~10단계**로 더 **자세하고 구체적**이어야 합니다. 각 단계에
+                   - 불 세기(약불/중불/강불) 또는 온도,
+                   - 시간(예: 2분, 30초),
+                   - 계량(예: 간장 1큰술, 물 120ml)을 포함하고,
+                   - 전처리/순서 이유/식감 포인트 등 **요리 팁**을 넣습니다.
+                5) 모든 배열 항목은 공백 제거 및 중복 없이 작성합니다.
+
+                [출력 JSON 스키마]
                 {
+                  "notice": "현재 사용자님의 지병 및 알레르기(%s / %s)를 고려하여 기본 재료 사용량을 조절하고 안전한 레시피만 추천했습니다.",
                   "have": [
                     {
                       "title": "제목",
                       "ingredients": {
-                        "have": ["보유 재료 중 사용한 것들"],
+                        "have": ["보유 재료 중 사용한 것(고유, 중복 없음)"],
                         "need": [],
-                        "seasoning": ["기본 양념 또는 소스"]
+                        "seasoning": ["간장 1큰술", "설탕 1작은술", "물 120ml", "..."]  // 기본 재료
                       },
-                      "steps": ["1단계", "2단계", "3단계 ..."]
+                      "steps": ["1단계 ...", "2단계 ...", "...(7~10단계)"]
                     },
                     { ... 총 3개 }
                   ],
@@ -214,125 +418,60 @@ public class RecipeService {
                     {
                       "title": "제목",
                       "ingredients": {
-                        "have": ["보유 재료 중 사용한 것들"],
-                        "need": ["추가로 필요한 재료 1~3개"],
-                        "seasoning": ["기본 양념 또는 소스"]
+                        "have": ["보유 재료 중 사용한 것(고유, 중복 없음)"],
+                        "need": ["추가 필요한 재료 1~3개(보유/금지 재료와 절대 겹치지 않음, **밥/쌀/물 제외**)"],
+                        "seasoning": ["간장 1큰술", "물 150ml", "..."]  // 기본 재료
                       },
-                      "steps": ["1단계", "2단계", "3단계 ..."]
+                      "steps": ["1단계 ...", "2단계 ...", "...(7~10단계)"]
                     },
                     { ... 총 3개 }
                   ]
                 }
-
-                조건:
-                - have 목록은 반드시 보유 재료만 사용해서 가능한 레시피 3개를 주세요.
-                - need 목록은 보유 재료를 베이스로 "추가 재료"를 1~3개 정도만 더해 만들 수 있는 레시피 3개를 주세요.
-                - 각 레시피는 한국어로 간결하고 실용적인 단계 설명(steps)을 포함해야 합니다.
-                - 같은 제목을 절대로 중복하지 마세요(avoid 제목 포함).
-                - JSON 외의 설명, 마크다운, 코멘트는 출력하지 마세요.
                 """.formatted(
                 String.join(", ", haveNow),
+                diseasesStr, allergiesStr,
                 avoidHave.isEmpty() ? "없음" : String.join(", ", avoidHave),
-                avoidNeed.isEmpty() ? "없음" : String.join(", ", avoidNeed)
+                avoidNeed.isEmpty() ? "없음" : String.join(", ", avoidNeed),
+                diseasesStr, allergiesStr
         );
     }
 
-    private AiResponse fallbackFrom(Set<String> haveNow) {
-        List<String> hv = new ArrayList<>(haveNow);
-        String hv1 = hv.isEmpty() ? "계란" : hv.get(0);
-        String hv2 = hv.size() > 1 ? hv.get(1) : "밥";
-        String hv3 = hv.size() > 2 ? hv.get(2) : "김치";
-
-        AiRecipe a = new AiRecipe(
-                "간단 " + hv1 + " 볶음",
-                List.of(hv1),
-                List.of(),
-                List.of("소금", "후추", "식용유"),
-                List.of("재료 손질", "센 불에 빠르게 볶기", "간 맞추기")
-        );
-
-        AiRecipe b = new AiRecipe(
-                hv2 + " 주먹밥",
-                List.of(hv2),
-                List.of(),
-                List.of("소금", "참기름", "김가루"),
-                List.of("밥에 양념 섞기", "동그랗게 쥐기", "마무리")
-        );
-
-        AiRecipe c = new AiRecipe(
-                hv3 + " 무침",
-                List.of(hv3),
-                List.of(),
-                List.of("고춧가루", "식초", "설탕"),
-                List.of("재료 썰기", "양념 버무리기", "접시에 담기")
-        );
-
-        AiRecipe d = new AiRecipe(
-                hv1 + " 덮밥",
-                List.of(hv1),
-                List.of("양파"),
-                List.of("간장", "설탕", "참기름"),
-                List.of("양파 볶기", hv1 + " 넣고 볶기", "밥 위에 올리기")
-        );
-
-        AiRecipe e = new AiRecipe(
-                hv2 + " 전",
-                List.of(hv2),
-                List.of("부침가루", "파"),
-                List.of("소금", "식용유"),
-                List.of("반죽 만들기", "앞뒤로 부치기", "완성")
-        );
-
-        AiRecipe f = new AiRecipe(
-                hv3 + " 찌개",
-                List.of(hv3),
-                List.of("두부"),
-                List.of("고춧가루", "다시마육수"),
-                List.of("육수 끓이기", hv3 + " 넣기", "간 맞춰 마무리")
-        );
-
-        AiResponse res = new AiResponse();
-        res.have = new ArrayList<>(List.of(a, b, c));
-        res.need = new ArrayList<>(List.of(d, e, f));
-        return res;
-    }
-
-    /** ←← 여기만 변경: id를 Long으로 생성해서 DTO에 맞춘다 */
+    /** id를 Long으로 생성해서 DTO에 맞춤 */
     private RecipeSuggestionResponse toSuggestion(AiRecipe r) {
         List<String> main = new ArrayList<>();
         if (r.ingredients != null) {
             if (r.ingredients.have != null) main.addAll(r.ingredients.have);
             if (r.ingredients.need != null) main.addAll(r.ingredients.need);
         }
+        main = main.stream().filter(Objects::nonNull).map(String::trim).distinct().toList();
 
         List<String> seasoning = (r.ingredients != null && r.ingredients.seasoning != null)
-                ? r.ingredients.seasoning
+                ? r.ingredients.seasoning.stream().filter(Objects::nonNull).map(String::trim).toList()
                 : List.of();
 
         List<String> missing = (r.ingredients != null && r.ingredients.need != null)
-                ? r.ingredients.need
+                ? r.ingredients.need.stream().filter(Objects::nonNull).map(String::trim).distinct().toList()
                 : List.of();
 
         String content = (r.steps == null || r.steps.isEmpty())
                 ? ""
                 : String.join("\n", r.steps);
 
-        // int → Long 변환 (음수 방지 위해 unsigned long 사용)
-        long hash = Integer.toUnsignedLong(
-                Objects.hash(
-                        Optional.ofNullable(r.title).orElse(""),
-                        main.toString(),
-                        content
-                )
-        );
+        long hash = Integer.toUnsignedLong(Objects.hash(
+                Optional.ofNullable(r.title).orElse(""),
+                main.toString(),
+                seasoning.toString(),
+                missing.toString(),
+                content
+        ));
 
         return new RecipeSuggestionResponse(
-                hash,               // Long id
+                hash,
                 r.title,
-                main,               // mainIngredients
-                seasoning,          // seasoningIngredients
-                missing,            // missing
-                content             // content
+                main,
+                seasoning,
+                missing,
+                content
         );
     }
 
@@ -367,6 +506,7 @@ public class RecipeService {
         try {
             ai = mapper.readValue(e.getDetail(), AiResponse.class).sanitize();
         } catch (Exception ex) {
+            log.warn("[AI] DB detail 파싱 실패(id={}): {}", id, ex.toString());
             ai = new AiResponse();
         }
 
@@ -375,25 +515,25 @@ public class RecipeService {
         ret.put("title", e.getName());
         ret.put("have", ai.have.stream().map(this::toSuggestion).toList());
         ret.put("need", ai.need.stream().map(this::toSuggestion).toList());
+        ret.put("notice", ai.notice == null ? "" : ai.notice);
         return ret;
     }
 
+    // ====== DTOs ======
+    record Health(Set<String> diseases, Set<String> allergies) {}
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     static class AiResponse {
+        public String notice;
         public List<AiRecipe> have = new ArrayList<>();
         public List<AiRecipe> need = new ArrayList<>();
 
         AiResponse sanitize() {
             if (have == null) have = new ArrayList<>();
             if (need == null) need = new ArrayList<>();
-
-            have.forEach(r -> {
-                if (r.title == null) r.title = "이름 없는 레시피";
-            });
-            need.forEach(r -> {
-                if (r.title == null) r.title = "이름 없는 레시피";
-            });
-
+            have.forEach(r -> { if (r.title == null) r.title = "이름 없는 레시피"; });
+            need.forEach(r -> { if (r.title == null) r.title = "이름 없는 레시피"; });
+            if (notice == null) notice = "";
             return this;
         }
     }
@@ -403,23 +543,7 @@ public class RecipeService {
         public String title;
         public Ingredients ingredients = new Ingredients();
         public List<String> steps = new ArrayList<>();
-
         public AiRecipe() {}
-
-        public AiRecipe(
-                String title,
-                List<String> have,
-                List<String> need,
-                List<String> seasoning,
-                List<String> steps
-        ) {
-            this.title = title;
-            this.ingredients = new Ingredients();
-            this.ingredients.have = have != null ? have : new ArrayList<>();
-            this.ingredients.need = need != null ? need : new ArrayList<>();
-            this.ingredients.seasoning = seasoning != null ? seasoning : new ArrayList<>();
-            this.steps = steps != null ? steps : new ArrayList<>();
-        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
