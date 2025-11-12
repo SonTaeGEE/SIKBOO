@@ -20,6 +20,7 @@ import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequest
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -36,7 +37,10 @@ public class SecurityConfig {
   private final CustomOAuth2UserService customOAuth2UserService;
   // OAuth2 로그인 성공 시 JWT 발급/쿠키 설정/리다이렉트 처리 핸들러
   private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+//⬇⬇ 추가: 온보딩 가드 주입
+ private final com.stg.sikboo.onboarding.infra.OnboardingGuardFilter onboardingGuardFilter;
 
+  
   @Value("${app.frontend-url:}")
   private String FRONTEND_URL;
 
@@ -92,6 +96,10 @@ public class SecurityConfig {
       .authorizeHttpRequests(a -> a
         // 정적 루트와 에러 페이지는 공개
         .requestMatchers("/", "/favicon.ico", "/error").permitAll()
+        
+     // ⬇⬇ 추가: 온보딩 엔드포인트 화이트리스트
+        .requestMatchers("/api/onboarding", "/api/onboarding/skip").permitAll()
+
 
         // 팀 규칙에 맞춰 OAuth 인가/콜백과 로그인 엔드포인트를 /api 아래로 통일하여 허용
         // 예: "/api/oauth2/authorization/kakao", "/api/login/oauth2/code/kakao" 등
@@ -133,6 +141,10 @@ public class SecurityConfig {
         .jwt(Customizer.withDefaults())
         .bearerTokenResolver(cookieOrAuthHeader())
       );
+    
+ // ⬇⬇ 추가: 필터 체인에 온보딩 가드 삽입
+    // JWT 인증이 끝난 후(익명 필터 이후) 온보딩 상태를 검사하도록 배치
+    http.addFilterAfter(onboardingGuardFilter, AnonymousAuthenticationFilter.class);
 
     return http.build();
   }
