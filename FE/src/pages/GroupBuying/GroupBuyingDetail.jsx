@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { MapPin, MessageCircle, Users, Clock } from 'lucide-react';
+import { MapPin, MessageCircle, Users, Clock, ShoppingBag } from 'lucide-react';
 import { getTimeRemaining } from '@/lib/dateUtils';
 import {
   useGroupBuying,
@@ -9,6 +9,9 @@ import {
   useLeaveGroupBuying,
 } from '@/hooks/useGroupBuying';
 import { useCurrentUser } from '@/hooks/useUser';
+import Loading from '@/components/common/Loading';
+import EmptyState from '@/components/common/EmptyState';
+import ParticipantList from '@/components/GroupBuying/ParticipantList';
 
 const GroupBuyingDetail = () => {
   const { id } = useParams();
@@ -71,9 +74,7 @@ const GroupBuyingDetail = () => {
   if (isLoadingGroupBuying || isLoadingParticipants) {
     return (
       <div className="mx-auto min-h-screen max-w-2xl p-4">
-        <div className="py-20 text-center">
-          <p className="text-gray-500">로딩 중...</p>
-        </div>
+        <Loading message="공동구매 정보를 불러오는 중..." />
       </div>
     );
   }
@@ -81,12 +82,14 @@ const GroupBuyingDetail = () => {
   if (!groupBuying) {
     return (
       <div className="mx-auto min-h-screen max-w-2xl p-4">
-        <div className="py-20 text-center">
-          <p className="text-gray-500">공동구매를 찾을 수 없습니다.</p>
-          <button onClick={() => navigate('/')} className="mt-4 text-blue-500 hover:text-blue-600">
-            홈으로 돌아가기
-          </button>
-        </div>
+        <EmptyState
+          icon={ShoppingBag}
+          title="공동구매를 찾을 수 없습니다"
+          message="요청하신 공동구매가 존재하지 않거나 삭제되었습니다."
+          showBackButton={true}
+          homeButtonText="공동구매 목록"
+          onBack={() => navigate('/group-buying')}
+        />
       </div>
     );
   }
@@ -167,46 +170,7 @@ const GroupBuyingDetail = () => {
         )}
 
         {/* 참여자 목록 */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h3 className="mb-4 font-bold text-gray-800">참여자 ({participants.length}명)</h3>
-          <div className="space-y-3">
-            {participants.length === 0 ? (
-              <div className="py-8 text-center text-sm text-gray-500">아직 참여자가 없습니다.</div>
-            ) : (
-              participants.map((participant) => (
-                <div
-                  key={participant.participantId}
-                  className={`flex items-center gap-3 rounded-lg p-3 ${
-                    participant.memberId === groupBuying.memberId ? 'bg-purple-50' : 'bg-gray-50'
-                  }`}
-                >
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full font-bold text-white ${
-                      participant.memberId === groupBuying.memberId ? 'bg-[#5f0080]' : 'bg-gray-400'
-                    }`}
-                  >
-                    {participant.memberName.substring(0, 1)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-800">{participant.memberName}</div>
-                    <div
-                      className={`text-xs ${
-                        participant.memberId === groupBuying.memberId
-                          ? 'text-[#5f0080]'
-                          : 'text-gray-500'
-                      }`}
-                    >
-                      {participant.memberId === groupBuying.memberId ? '주최자' : '참여자'}
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {new Date(participant.joinedAt).toLocaleDateString('ko-KR')}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <ParticipantList participants={participants} hostId={groupBuying.memberId} />
 
         {/* 액션 버튼 */}
         <div className="flex gap-3">
