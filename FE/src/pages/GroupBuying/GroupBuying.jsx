@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Users, Clock, Plus, Search, ShoppingBag } from 'lucide-react';
-import { getTimeRemaining } from '@/lib/dateUtils';
+import { MapPin, Plus, Search } from 'lucide-react';
+
 import { useKakaoMap } from '@/hooks/useKakaoMap';
 import { useActiveGroupBuyings, useMyParticipatingGroupBuyings } from '@/hooks/useGroupBuying';
 import { useCurrentUser } from '@/hooks/useUser';
+import { calculateDistance } from '@/utils/calculateDistance';
+import { GROUP_BUYING_CATEGORY } from '@/constants/category';
+import GroupBuyingCard from '@/components/GroupBuying/GroupBuyingCard';
+import Loading from '@/components/common/Loading';
 
 const GroupBuying = () => {
   const navigate = useNavigate();
@@ -29,17 +33,6 @@ const GroupBuying = () => {
     useMyParticipatingGroupBuyings(currentUser?.id, {
       enabled: activeTab === 'joined' && !!currentUser?.id,
     });
-
-  // 카테고리 정의
-  const categories = [
-    { id: 'all', name: '전체', icon: '🛒' },
-    { id: 'FRUIT', name: '과일', icon: '🍎' },
-    { id: 'VEGETABLE', name: '채소', icon: '🥕' },
-    { id: 'MEAT', name: '육류', icon: '🥩' },
-    { id: 'SEAFOOD', name: '수산물', icon: '🐟' },
-    { id: 'DAIRY', name: '유제품', icon: '🥛' },
-    { id: 'ETC', name: '기타', icon: '🥚' },
-  ];
 
   // 현재 위치 가져오기
   useEffect(() => {
@@ -86,21 +79,6 @@ const GroupBuying = () => {
 
     getCurrentLocation();
   }, [isLoaded]);
-
-  // Haversine 공식을 이용한 거리 계산 (km 단위)
-  const calculateDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371; // 지구 반지름 (km)
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLng = ((lng2 - lng1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // km
-  };
 
   // 현재 탭에 따라 데이터 선택
   const currentItems =
@@ -203,7 +181,7 @@ const GroupBuying = () => {
         {/* Category Tabs - Kurly Style */}
         <div className="-mx-4 mb-4 px-4">
           <div className="scrollbar-hide flex gap-2 overflow-x-auto border-b border-[#e0e0e0] pb-2">
-            {categories.map((cat) => (
+            {GROUP_BUYING_CATEGORY.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setCategory(cat.id)}
@@ -260,9 +238,7 @@ const GroupBuying = () => {
           </div>
 
           {isLoading ? (
-            <div className="rounded-lg bg-gray-50 py-16 text-center">
-              <p className="text-sm text-gray-500">로딩 중...</p>
-            </div>
+            <Loading message="공동구매 목록을 불러오는 중..." />
           ) : filteredItems.length === 0 ? (
             <div className="rounded-lg bg-gray-50 py-16 text-center">
               <p className="text-sm text-gray-500">
@@ -273,82 +249,13 @@ const GroupBuying = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
-              {filteredItems.map((item) => {
-                return (
-                  <div
-                    key={item.groupBuyingId}
-                    onClick={() => navigate(`/group-buying/detail/${item.groupBuyingId}`)}
-                    className="cursor-pointer overflow-hidden rounded-lg border border-[#e0e0e0] bg-white transition hover:shadow-lg"
-                  >
-                    {/* Product Info */}
-                    <div className="p-4">
-                      <div className="mb-2 flex items-start justify-between">
-                        <h4 className="line-clamp-1 flex-1 text-lg font-medium text-[#333333]">
-                          {item.title}
-                        </h4>
-                        {item.status === '모집중' ? (
-                          <div className="ml-2 rounded-full bg-[#5f0080] px-2 py-0.5 text-xs font-medium whitespace-nowrap text-white">
-                            모집중
-                          </div>
-                        ) : (
-                          <div className="ml-2 rounded-full bg-[#999999] px-2 py-0.5 text-xs font-medium whitespace-nowrap text-white">
-                            마감
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mb-2 flex items-center gap-2 text-xs text-[#999999]">
-                        <MapPin size={11} />
-                        <span>{item.pickupLocation}</span>
-                        {activeTab === 'recruiting' && (
-                          <>
-                            <span>·</span>
-                            <span>
-                              {item.distance !== null
-                                ? `${item.distance.toFixed(1)}km`
-                                : '거리 계산중'}
-                            </span>
-                          </>
-                        )}
-                      </div>
-
-                      <div className="mb-2 flex items-center gap-3 text-xs">
-                        <div className="flex items-center gap-1 text-[#666666]">
-                          <Users size={13} className="text-[#5f0080]" />
-                          <span>
-                            {item.currentPeople}/{item.maxPeople}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 text-[#666666]">
-                          <Clock size={13} className="text-[#ff6b6b]" />
-                          {getTimeRemaining(item.deadline) === '마감' ? (
-                            <span>마감까지</span>
-                          ) : (
-                            <span>마감까지 {getTimeRemaining(item.deadline)}</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="border-t border-[#f4f4f4] pt-2">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-1">
-                            <p className="text-sm text-gray-500">1인당 예상 가격</p>
-                            <div className="flex items-baseline gap-2">
-                              <span className="text-2xl font-bold text-gray-900">
-                                {(item.totalPrice / item.maxPeople).toLocaleString()}원
-                              </span>
-                              <span className="text-sm text-gray-400 line-through">
-                                {item.totalPrice.toLocaleString()}원
-                              </span>
-                            </div>
-                          </div>
-                          <ShoppingBag size={18} className="text-[#5f0080]" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {filteredItems.map((item) => (
+                <GroupBuyingCard
+                  key={item.groupBuyingId}
+                  item={item}
+                  showDistance={activeTab === 'recruiting'}
+                />
+              ))}
             </div>
           )}
         </div>

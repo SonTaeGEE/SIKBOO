@@ -39,9 +39,13 @@ public class ChatMessage {
     @JoinColumn(name = "groupbuying_id", nullable = false)
     private GroupBuying groupBuying;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "member_id", nullable = false)
-    private Member member;
+    // Member 탈퇴 후에도 채팅 기록 보존을 위해 논리적 연결만 유지
+    @Column(name = "member_id", nullable = false)
+    private Long memberId;
+    
+    // 작성자 이름 비정규화 (탈퇴 후에도 표시 가능)
+    @Column(name = "member_name", nullable = false, length = 50)
+    private String memberName;
 
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String message;
