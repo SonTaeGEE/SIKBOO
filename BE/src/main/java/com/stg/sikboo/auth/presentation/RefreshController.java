@@ -39,7 +39,7 @@ public class RefreshController {
     // 회전: 이전 것 제거 → 새 Access/Refresh 발급
     refreshTokenRepository.deleteByMemberId(memberId);
 
-    String newAccess  = jwtIssuer.access(memberId, List.of("ROLE_USER"), Duration.ofMinutes(30));
+    String newAccess  = jwtIssuer.access(memberId, List.of("ROLE_USER"), Duration.ofMinutes(60));
     String newRefresh = jwtIssuer.refresh(memberId, Duration.ofDays(14));
     var newRow = new RefreshToken();
     newRow.setMemberId(memberId);
@@ -48,7 +48,7 @@ public class RefreshController {
     refreshTokenRepository.save(newRow);
 
     var headers = new HttpHeaders();
-    headers.add(HttpHeaders.SET_COOKIE, cookie("ACCESS", newAccess, 1800));
+    headers.add(HttpHeaders.SET_COOKIE, cookie("ACCESS", newAccess, 3600));
     headers.add(HttpHeaders.SET_COOKIE, cookie("REFRESH", newRefresh, 14*24*3600));
     return new ResponseEntity<>(headers, HttpStatus.NO_CONTENT);
   }

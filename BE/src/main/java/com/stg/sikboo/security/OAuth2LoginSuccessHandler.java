@@ -73,7 +73,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     refreshTokenRepository.save(row);
 
     // ★ 쿠키 세팅(백엔드 도메인용) — 분리 도메인에서 쿠키 인증을 쓰려면 SameSite=None + Secure 필요(운영)
-    res.addHeader(HttpHeaders.SET_COOKIE, cookie("ACCESS", access, 1800, true));
+    res.addHeader(HttpHeaders.SET_COOKIE, cookie("ACCESS", access, 3600, true));
     res.addHeader(HttpHeaders.SET_COOKIE, cookie("REFRESH", refresh, 14*24*3600, true));
 
     // // ★ 프론트 성공 페이지로 redirect

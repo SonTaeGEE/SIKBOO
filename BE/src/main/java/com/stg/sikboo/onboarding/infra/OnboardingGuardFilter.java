@@ -30,6 +30,7 @@ public class OnboardingGuardFilter extends OncePerRequestFilter {
     // ⬇️ 온보딩 체크 제외 경로
     private static final Set<String> WHITELIST = Set.of(
         "/api/onboarding",
+        "/api/ingredients/analyze-text", // AI 분석(온보딩 중 허용)
         "/api/auth/me",
         "/api/auth/logout",
         "/api/auth/refresh",
