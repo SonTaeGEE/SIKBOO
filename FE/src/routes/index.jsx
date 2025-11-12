@@ -11,6 +11,7 @@ import MyPage from '@/pages/MyPage/MyPage';
 import Login from '@/pages/Auth/Login';
 import Signup from '@/pages/Auth/Signup';
 import OAuth2Success from '@/pages/Auth/OAuth2Success';
+import Onboarding from '@/pages/Auth/Onboarding';
 
 const AppRoutes = () => {
   const location = useLocation();
@@ -19,7 +20,8 @@ const AppRoutes = () => {
   const isAuthPage =
     location.pathname === '/login' ||
     location.pathname === '/signup' ||
-    location.pathname === '/oauth2/success';
+    location.pathname === '/oauth2/success' ||
+    location.pathname === '/onboarding';
 
   // 페이지별 헤더 설정
   const getHeaderConfig = () => {
@@ -58,7 +60,8 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="/oauth2/success" element={<OAuth2Success />} /> {/* ✅ 추가 */}
+        <Route path="/oauth2/success" element={<OAuth2Success />} />
+        <Route path="/onboarding" element={<Onboarding />} /> {/* ⬅️ 추가 */}
       </Routes>
     );
   }
