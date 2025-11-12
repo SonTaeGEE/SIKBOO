@@ -34,85 +34,68 @@ public class IngredientService {
     // 한국 시간대. due(유통기한)를 "KST 00:00" 기준 LocalDateTime으로 저장/비교
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
+    // 위치별 기본 보관일
+    private static final int DAYS_FRIDGE = 7;   // 냉장고
+    private static final int DAYS_FREEZER = 90; // 냉동실
+    private static final int DAYS_ROOM    = 3;  // 실온
+
     // 목록 조회
-    /**
-     * memberId 소유 재료 목록을 페이지로 조회.
-     * - location이 null이 아니면 enum.name() 으로 문자열 전달하여 DB에서 필터링
-     * - q가 비어있으면 null로 치환하여 LIKE 조건 제거
-     * - sort, order로 정렬 기준 생성
-     * - Page<Ingredient> → Page<IngredientResponseDTO> 매핑 후 PageResponseDTO로 감쌈
-     */
     public PageResponseDTO<IngredientResponseDTO> list(
             Long memberId, IngredientLocation location, String q,
             int page, int size, String sort, String order
     ) {
         Sort s = sort(sort, order);
 
-        // location(enum)을 네이티브 쿼리 비교를 위해 String(name) 으로 변환
         String loc = (location == null) ? null : location.name();
 
         Page<Ingredient> result = repo.search(
                 memberId,
                 loc,
                 emptyToNull(q),
-//                PageRequest.of(page, size, s)
+                // PageRequest.of(page, size, s)  // 네이티브 쿼리에 ORDER BY가 있어 s 미사용
                 PageRequest.of(page, size)
         );
 
-        // 엔티티 → 응답 DTO 매핑 (KST 기준 포맷/계산 반영)
         Page<IngredientResponseDTO> mapped = result.map(i -> IngredientResponseDTO.from(i, KST));
         return PageResponseDTO.from(mapped);
     }
 
     // 단건 조회
-    /**
-     * 소유자(memberId) 검증을 포함한 단건 조회.
-     * - 없으면 404(NotFound) 예외 발생
-     */
     public IngredientResponseDTO get(Long memberId, Long id) {
         Ingredient i = repo.findByIdAndMemberId(id, memberId).orElseThrow(NotFound::new);
         return IngredientResponseDTO.from(i, KST);
     }
 
-    // 생성
+    // 생성: due 미입력 시 위치별 자동보정(+7/+90/+3, KST 자정)
     public Long create(Long memberId, CreateIngredientRequestDTO req) {
         if (req == null) throw badRequest("요청 본문이 비어있습니다.");
         if (isBlank(req.ingredientName())) throw badRequest("ingredientName 은 필수입니다.");
         if (req.location() == null) throw badRequest("location 은 필수입니다.");
-        if (isBlank(req.due())) throw badRequest("due(YYYY-MM-DD) 는 필수입니다.");
 
-        // due 파싱
-        LocalDate dueDate;
-        try {
-            dueDate = LocalDate.parse(req.due());
-        } catch (DateTimeParseException e) {
-            throw badRequest("due 형식이 올바르지 않습니다. 예: 2025-11-30");
-        }
+        final boolean hasDueInput = !isBlank(req.due());
+        final LocalDateTime dueLdt = hasDueInput
+                ? parseToKstMidnight(req.due())
+                : estimateByLocation(req.location());
 
-        // "KST 기준 자정"을 LocalDateTime으로. (ZonedDateTime → LocalDateTime)
-        LocalDateTime dueDateTime = dueDate.atStartOfDay(KST).toLocalDateTime();
-
-        // --- 중복 검사 ---
-        // 동일 날짜 구간 [start, end) (= 해당 날짜의 00:00 ~ 다음날 00:00) + 동일 location 범위 내 후보 조회
-        LocalDateTime start = dueDate.atStartOfDay(KST).toLocalDateTime();
+        // --- 중복 검사 (최종 due 기준) ---
+        LocalDate theDate = dueLdt.toLocalDate();
+        LocalDateTime start = theDate.atStartOfDay(KST).toLocalDateTime();
         LocalDateTime end   = start.plusDays(1);
         var candidates = repo.findDupCandidates(
                 memberId,
-                req.location().name(), // enum → String
+                req.location().name(),
                 start, end
         );
-
-        // 이름 정규화 후 동일성 비교(대소문자/공백/정규화 차이 제거)
         String newNorm = norm(req.ingredientName());
         boolean dup = candidates.stream().anyMatch(c -> norm(c.getIngredientName()).equals(newNorm));
-        if (dup) throw new Duplicate(req.ingredientName(), req.location().name(), req.due());
+        if (dup) throw new Duplicate(req.ingredientName(), req.location().name(), theDate.toString());
 
-        // 저장
         Ingredient saved = repo.save(Ingredient.builder()
                 .memberId(memberId)
                 .ingredientName(req.ingredientName())
                 .location(req.location())
-                .due(dueDateTime)
+                .due(dueLdt)
+                .isDueEstimated(!hasDueInput)   // 입력 없으면 true, 있으면 false
                 .memo(req.memo())
                 .build());
 
@@ -123,28 +106,35 @@ public class IngredientService {
     public IngredientResponseDTO update(Long memberId, Long id, UpdateIngredientRequestDTO req) {
         Ingredient i = repo.findByIdAndMemberId(id, memberId).orElseThrow(NotFound::new);
 
-        // 이름: 없으면 기존 유지
         String newName = (req != null && !isBlank(req.ingredientName())) ? req.ingredientName() : i.getIngredientName();
-
-        // 위치(location): 없으면 기존 유지
         IngredientLocation newLoc = (req != null && req.location() != null) ? req.location() : i.getLocation();
 
-        // due: 없으면 기존 유지, 있으면 파싱(형식 오류 시 400)
-        LocalDate newDueDate;
+        // 1) 사용자가 due를 보냈으면 → 그 값 적용 + 추정 아님(false)
         if (req != null && !isBlank(req.due())) {
-            try { newDueDate = LocalDate.parse(req.due()); }
-            catch (DateTimeParseException e) { throw badRequest("due 형식이 올바르지 않습니다. 예: 2025-11-30"); }
-        } else {
-            newDueDate = i.getDue().toLocalDate();
+            LocalDateTime newDueLdt = parseToKstMidnight(req.due());
+            i.setDue(newDueLdt);
+            i.setDueEstimated(false);
         }
-        LocalDateTime newDueDateTime = newDueDate.atStartOfDay(KST).toLocalDateTime();
+        // 2) due 미전송 + location만 바뀜 → 기존이 추정값(true)이면 재추정
+        else if (!newLoc.equals(i.getLocation()) && i.isDueEstimated()) {
+            LocalDateTime reEstimated = estimateByLocation(newLoc);
+            i.setDue(reEstimated);
+            i.setDueEstimated(true);
+        }
+        // (그 외) 날짜/플래그 유지
 
-        // --- 자신 제외 중복 검사 ---
+        // 필수 변경 반영
+        i.setIngredientName(newName);
+        i.setLocation(newLoc);
+        if (req != null && req.memo() != null) i.setMemo(req.memo());
+
+        // --- 자신 제외 중복 검사 (최종 값 기준) ---
+        LocalDate newDueDate = i.getDue().toLocalDate();
         LocalDateTime start = newDueDate.atStartOfDay(KST).toLocalDateTime();
         LocalDateTime end   = start.plusDays(1);
         var candidates = repo.findDupCandidates(
                 memberId,
-                newLoc.name(), // enum → String
+                newLoc.name(),
                 start, end
         );
         String newNorm = norm(newName);
@@ -152,45 +142,30 @@ public class IngredientService {
                 .anyMatch(c -> !c.getId().equals(id) && norm(c.getIngredientName()).equals(newNorm));
         if (dup) throw new Duplicate(newName, newLoc.name(), newDueDate.toString());
 
-        // 변경(영속 엔티티: save 호출 없이 더티체킹으로 반영)
-        i.setIngredientName(newName);
-        i.setLocation(newLoc);
-        i.setDue(newDueDateTime);
-        if (req != null && req.memo() != null) i.setMemo(req.memo());
-
         return IngredientResponseDTO.from(i, KST);
     }
 
     // 삭제
-//    public void delete(Long memberId, Long id) {
-//        Ingredient i = repo.findByIdAndMemberId(id, memberId).orElseThrow(NotFound::new);
-//        repo.delete(i);
-//    }
     public void delete(Long memberId, Long id) {
-        System.out.println("삭제 시도: memberId=" + memberId + ", ingredientId=" + id); // ★ 디버깅 로그
+        System.out.println("삭제 시도: memberId=" + memberId + ", ingredientId=" + id);
         Ingredient i = repo.findByIdAndMemberId(id, memberId).orElseThrow(() -> {
-            System.err.println("레코드를 찾을 수 없음: ingredientId=" + id + ", memberId=" + memberId); // ★
+            System.err.println("레코드를 찾을 수 없음: ingredientId=" + id + ", memberId=" + memberId);
             return new NotFound();
         });
-        System.out.println("삭제 대상: " + i.getIngredientName()); // ★
+        System.out.println("삭제 대상: " + i.getIngredientName());
         repo.delete(i);
-        System.out.println("삭제 완료: ingredientId=" + id); // ★
+        System.out.println("삭제 완료: ingredientId=" + id);
     }
 
     // helpers
-    // 400 Bad Request 헬퍼
     private static ResponseStatusException badRequest(String msg) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, msg);
     }
 
-    // 공백/널 체크
     private static boolean isBlank(String s) { return s == null || s.trim().isEmpty(); }
 
-    // 빈 문자열을 null로
     private static String emptyToNull(String s) { return (s == null || s.isBlank()) ? null : s; }
 
-    
-    // 정렬 기준 생성
     private static Sort sort(String sort, String order) {
         Sort.Direction dir = "desc".equalsIgnoreCase(order) ? Sort.Direction.DESC : Sort.Direction.ASC;
         if ("name".equalsIgnoreCase(sort) || "ingredientName".equalsIgnoreCase(sort)) {
@@ -199,8 +174,6 @@ public class IngredientService {
         return Sort.by(Sort.Order.asc("due"), Sort.Order.asc("ingredientName"));
     }
 
-    // 이름 정규화
-    
     private static String norm(String s) {
         if (s == null) return "";
         String t = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFKC);
@@ -208,7 +181,28 @@ public class IngredientService {
         return t.replaceAll("\\s+", "");
     }
 
-    // 예외 타입 (상태코드 매핑)
+    // "YYYY-MM-DD" → KST 자정(LocalDateTime)
+    private static LocalDateTime parseToKstMidnight(String ymd) {
+        try {
+            LocalDate d = LocalDate.parse(ymd);
+            return d.atStartOfDay(KST).toLocalDateTime();
+        } catch (DateTimeParseException e) {
+            throw badRequest("due 형식이 올바르지 않습니다. 예: 2025-11-30");
+        }
+    }
+
+    // 위치별 규칙으로 오늘 기준 자동 추정 → KST 자정
+    private static LocalDateTime estimateByLocation(IngredientLocation loc) {
+        int plusDays = switch (loc) {
+            case 냉장고 -> DAYS_FRIDGE;
+            case 냉동실 -> DAYS_FREEZER;
+            case 실온   -> DAYS_ROOM;
+        };
+        LocalDate target = LocalDate.now(KST).plusDays(plusDays);
+        return target.atStartOfDay(KST).toLocalDateTime();
+    }
+
+    // 예외 타입
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public static class NotFound extends RuntimeException {}
 

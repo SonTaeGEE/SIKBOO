@@ -33,11 +33,18 @@ export default function RecipeSessionDetail() {
   if (detail.isLoading) return <Skeleton />;
   if (detail.isError) return <ErrorBox error={detail.error} />;
 
-  const { title, have = [], need = [] } = detail.data || {};
+  const { title, have = [], need = [], notice = '' } = detail.data || {};
 
   return (
     <div className="mx-auto min-h-[100dvh] w-full max-w-full bg-[#F8F3FF] px-4 pt-3 pb-[88px] md:max-w-screen-md md:px-6 lg:max-w-4xl lg:px-8">
       <h1 className="mb-2 text-lg font-bold">{title}</h1>
+
+      {/* 건강/알레르기 안내문 */}
+      {notice && (
+        <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+          {notice}
+        </div>
+      )}
 
       {/* 있는 식재료로 만든 레시피 */}
       <SectionTitle>있는 식재료로 만든 레시피</SectionTitle>

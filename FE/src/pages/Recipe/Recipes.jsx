@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import SectionTitle from '@/components/Recipe/SectionTitle';
@@ -6,29 +6,41 @@ import Skeleton from '@/components/Recipe/Skeleton';
 import Empty from '@/components/Recipe/Empty';
 import ErrorBox from '@/components/Recipe/ErrorBox';
 import IngredientRow from '@/components/Recipe/IngredientRow';
+import RecipeGeneratingOverlay from '@/components/ui/RecipeGeneratingOverlay';
 import recipeApi from '@/api/recipeApi';
 
-// 탭 정의
 const Tab = { CREATE: 'CREATE', LIST: 'LIST' };
 const cx = (...xs) => xs.filter(Boolean).join(' ');
 
-// React Query 키
 const qKeys = {
   myIngredients: ['ingredients', 'mine'],
-  sessions: ['recipes', 'sessions'], // ★ 방 목록
+  sessions: ['recipes', 'sessions'],
   sessionDetail: (id) => ['recipes', 'session', id],
 };
 
 export default function Recipes() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+
+  // ---------- 탭 초기화 규칙 ----------
+  // 1) 다른 탭에서 /recipes 로 "처음" 진입하면 CREATE
+  // 2) 상세 -> 브라우저 뒤로가기(popstate) 시에는 기존 state 유지
+  // 구현: mount 시에만 CREATE로 강제, 이후엔 건드리지 않음
   const [tab, setTab] = useState(Tab.CREATE);
+
+  useEffect(() => {
+    // mount 직후 한 번만 생성 탭으로 강제
+    setTab(Tab.CREATE);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [selected, setSelected] = useState(() => new Set());
 
   // 내 재료
   const my = useQuery({
     queryKey: qKeys.myIngredients,
     queryFn: recipeApi.fetchMyIngredients,
+    enabled: tab === Tab.CREATE,
   });
 
   const toggle = (id) =>
@@ -38,21 +50,17 @@ export default function Recipes() {
       return n;
     });
 
-  // 레시피 생성(방 생성) → 생성 끝나면 **목록 탭**으로만 전환 (자동 상세 이동 X)
+  // 레시피 생성(세션 생성)
   const gen = useMutation({
     mutationFn: () => recipeApi.generateRecipes(Array.from(selected)),
     onSuccess: () => {
-      // 방 목록 갱신
       qc.invalidateQueries({ queryKey: qKeys.sessions });
-      // 선택 초기화 + 탭 전환
       setSelected(new Set());
-      setTab(Tab.LIST);
-      // ❌ 자동 상세 이동 제거
-      // if (created?.id) navigate(`/recipes/sessions/${created.id}`);
+      setTab(Tab.LIST); // 생성 완료 후 목록으로
     },
   });
 
-  // 방(세션) 목록
+  // 세션 목록
   const sessions = useQuery({
     queryKey: qKeys.sessions,
     queryFn: recipeApi.listSessions,
@@ -142,30 +150,32 @@ export default function Recipes() {
         )}
       </div>
 
-      {/* ▼▼ 슬라이드 업 바 */}
-      <div
-        className={cx(
-          'fixed inset-x-0 bottom-[calc(64px+32px)] z-[999]',
-          'transform-gpu transition-all duration-300 ease-in-out',
-          'pointer-events-none',
-          selCount > 0 ? 'translate-y-0 opacity-100' : 'translate-y-[140%] opacity-0',
-        )}
-      >
-        <div className="mx-auto max-w-full px-4 md:max-w-screen-md md:px-6 lg:max-w-4xl lg:px-8">
-          <button
-            onClick={() => gen.mutate()}
-            disabled={gen.isPending || selCount === 0}
-            className="pointer-events-auto flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-4 text-white shadow-lg disabled:opacity-60"
-          >
-            레시피 생성
-            {selCount > 0 && (
-              <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs">
-                {selCount}
-              </span>
-            )}
-          </button>
+      {/* 생성 진행 중 오버레이 (컴포넌트 연동) */}
+      <RecipeGeneratingOverlay
+        visible={gen.isPending}
+        message="레시피 생성중"
+        blockPointer={true}
+      />
+
+      {/* 하단 슬라이드 업 바는 선택이 있을 때만 렌더(네브바 간섭 방지) */}
+      {selCount > 0 && (
+        <div className="fixed inset-x-0 bottom-[calc(64px+32px)] z-[999] transform-gpu transition-all duration-300 ease-in-out">
+          <div className="mx-auto max-w-full px-4 md:max-w-screen-md md:px-6 lg:max-w-4xl lg:px-8">
+            <button
+              onClick={() => gen.mutate()}
+              disabled={gen.isPending || selCount === 0}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-4 text-white shadow-lg disabled:opacity-60"
+            >
+              레시피 생성
+              {selCount > 0 && (
+                <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs">
+                  {selCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

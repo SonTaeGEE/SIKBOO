@@ -63,4 +63,16 @@ public class Member {
     if (diseases == null)  diseases  = new String[]{}; // DDL의 DEFAULT '{}' 대응
     if (allergies == null) allergies = new String[]{}; // DDL의 DEFAULT '{}' 대응
   }
+  
+//⬇️ 추가: 온보딩 완료 처리
+ public void completeOnboarding() {
+   this.onboardingCompleted = true;
+ }
+
+ // ⬇️ 추가: 프로필 업데이트
+ public void updateProfile(String[] diseases, String[] allergies) {
+   this.diseases = diseases != null ? diseases : new String[]{};
+   this.allergies = allergies != null ? allergies : new String[]{};
+ }
+  
 }

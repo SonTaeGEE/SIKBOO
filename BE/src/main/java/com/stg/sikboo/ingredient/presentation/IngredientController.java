@@ -49,7 +49,7 @@ public class IngredientController {
 
     /** 단건 조회: 오너십 강제(findByIdAndMemberId) */
     @GetMapping("/{id}")
-    public IngredientResponseDTO get(@PathVariable Long id) {
+    public IngredientResponseDTO get(@PathVariable("id") Long id) {
         return service.get(currentMemberId(), id);
     }
 
