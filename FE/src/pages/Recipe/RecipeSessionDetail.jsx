@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import SectionTitle from '@/components/Recipe/SectionTitle';
 import Skeleton from '@/components/Recipe/Skeleton';
@@ -13,21 +13,10 @@ const qKeys = {
 
 export default function RecipeSessionDetail() {
   const { id } = useParams();
-  const qc = useQueryClient();
 
   const detail = useQuery({
     queryKey: qKeys.sessionDetail(id),
     queryFn: () => recipeApi.getSessionDetail(id),
-  });
-
-  const moreHave = useMutation({
-    mutationFn: () => recipeApi.recommendMore(id, 'have'),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qKeys.sessionDetail(id) }),
-  });
-
-  const moreNeed = useMutation({
-    mutationFn: () => recipeApi.recommendMore(id, 'need'),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qKeys.sessionDetail(id) }),
   });
 
   if (detail.isLoading) return <Skeleton />;
@@ -57,18 +46,6 @@ export default function RecipeSessionDetail() {
           ))}
         </div>
       )}
-      <div className="my-5 flex justify-center">
-        <button
-          onClick={() => moreHave.mutate()}
-          disabled={moreHave.isPending}
-          className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-4 py-2 text-indigo-700 disabled:opacity-60"
-        >
-          {moreHave.isPending && (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
-          )}
-          다른 레시피 추천받기!
-        </button>
-      </div>
 
       {/* 식재료가 필요한 레시피 */}
       <SectionTitle>식재료가 필요한 레시피</SectionTitle>
@@ -81,18 +58,6 @@ export default function RecipeSessionDetail() {
           ))}
         </div>
       )}
-      <div className="my-5 flex justify-center">
-        <button
-          onClick={() => moreNeed.mutate()}
-          disabled={moreNeed.isPending}
-          className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-4 py-2 text-indigo-700 disabled:opacity-60"
-        >
-          {moreNeed.isPending && (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
-          )}
-          다른 레시피 추천받기!
-        </button>
-      </div>
     </div>
   );
 }

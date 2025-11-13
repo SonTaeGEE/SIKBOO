@@ -99,31 +99,6 @@ public class RecipeController {
                 .build();
     }
 
-    // 프론트: POST /api/recipes/sessions/{id}/recommend-more (filter=have|need)
-    @PostMapping("/recipes/sessions/{id}/recommend-more")
-    public ResponseEntity<Void> recommendMoreForSession(
-            @AuthenticationPrincipal Jwt jwt,
-            @PathVariable("id") Long sessionId,
-            @RequestParam(name = "filter", required = false) String filter
-    ) {
-        Long memberId = currentMemberId(jwt);
-        log.info("[POST] /recipes/sessions/{}/recommend-more memberId={} filter={}", sessionId, memberId, filter);
-        recipeService.recommendMore(memberId, sessionId, filter); // ★ sessionId 전달
-        return ResponseEntity.ok().build();
-    }
-
-    // 하위 호환
-    @PostMapping("/recipes/recommend-more")
-    public ResponseEntity<Void> recommendMore(
-            @AuthenticationPrincipal Jwt jwt,
-            @RequestParam(name = "filter", required = false) String filter
-    ) {
-        Long memberId = currentMemberId(jwt);
-        log.info("[POST] /recipes/recommend-more memberId={} filter={}", memberId, filter);
-        // 세션 ID 없이 호출되는 구버전은 갱신 대상 세션을 알 수 없으므로 미지원
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-    }
-
     /** [방 목록] */
     @GetMapping("/recipes/sessions")
     public ResponseEntity<List<Map<String, Object>>> listSessions(@AuthenticationPrincipal Jwt jwt) {
