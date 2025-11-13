@@ -13,10 +13,11 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.annotation.PreDestroy;
 import java.sql.Array;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -45,6 +46,17 @@ public class RecipeService {
     private final Map<Long, AiResponse> lastAiResponse = new ConcurrentHashMap<>();
     private final Map<Long, Set<String>> generatedTitlesHave = new ConcurrentHashMap<>();
     private final Map<Long, Set<String>> generatedTitlesNeed = new ConcurrentHashMap<>();
+
+    // ★ 세션 단위 생성중 상태(탭 이동/재진입에도 유지)
+    private final Set<Long> generatingSessions = ConcurrentHashMap.newKeySet();
+
+    // ★ 백그라운드 생성용 스레드 풀(가볍게 2개)
+    private final ExecutorService aiExecutor = Executors.newFixedThreadPool(2);
+
+    @PreDestroy
+    public void shutdown() {
+        aiExecutor.shutdownNow();
+    }
 
     // 기본 재료(need에 절대 들어가면 안 되는 키워드)
     private static final Set<String> BASIC_ALWAYS_HAVE = Set.of(
@@ -118,7 +130,7 @@ public class RecipeService {
         }
     }
 
-    // ---------- 레시피 생성(캐시 + 세션 저장) ----------
+    // ---------- 레시피 생성(즉시 방 생성 → 비동기 AI) ----------
     @Transactional
     public Map<String, Object> generateRecipes(RecipeGenerateRequest req) {
         Long memberId = (req.memberId() != null) ? req.memberId() : 1L;
@@ -130,41 +142,65 @@ public class RecipeService {
         generatedTitlesHave.put(memberId, new HashSet<>());
         generatedTitlesNeed.put(memberId, new HashSet<>());
 
-        AiResponse ai = callAi(memberId, selectedNames, Set.of(), Set.of(), health);
-        lastAiResponse.put(memberId, ai);
+        // 1) 우선 "레시피 생성중…" 제목과 빈 페이로드로 방 생성 후 즉시 응답
+        Recipe session = new Recipe();
+        session.setMemberId(memberId);
+        session.setName("레시피 생성중…");
+        session.setDetail(emptyPayloadJson());
+        recipeRepository.save(session);
 
-        String haveTitle = ai.have.isEmpty() ? null : ai.have.get(0).title;
-        String needTitle = ai.need.isEmpty() ? null : ai.need.get(0).title;
+        // 세션 생성중 상태 세팅
+        generatingSessions.add(session.getId());
 
-        String sessionTitle;
-        if (haveTitle != null && needTitle != null) {
-            sessionTitle = haveTitle + " · " + needTitle;
-        } else if (haveTitle != null) {
-            sessionTitle = haveTitle;
-        } else if (needTitle != null) {
-            sessionTitle = needTitle;
-        } else {
-            sessionTitle = "AI 레시피 제안";
-        }
+        // 2) 백그라운드에서 AI 생성 → 세션 갱신
+        aiExecutor.submit(() -> {
+            try {
+                log.info("[AI-ASYNC] 시작 memberId={} sessionId={} haveNow={}", memberId, session.getId(), selectedNames);
+                AiResponse ai = callAi(memberId, selectedNames, Set.of(), Set.of(), health);
+                lastAiResponse.put(memberId, ai);
 
-        String payload;
-        try {
-            payload = mapper.writeValueAsString(ai);
-        } catch (Exception e) {
-            log.warn("[AI] serialize 실패: {}", e.toString());
-            payload = "{\"notice\":\"\",\"have\":[],\"need\":[]}";
-        }
+                String haveTitle = ai.have.isEmpty() ? null : ai.have.get(0).title;
+                String needTitle = ai.need.isEmpty() ? null : ai.need.get(0).title;
+                String sessionTitle;
+                if (haveTitle != null && needTitle != null) {
+                    sessionTitle = haveTitle + " · " + needTitle;
+                } else if (haveTitle != null) {
+                    sessionTitle = haveTitle;
+                } else if (needTitle != null) {
+                    sessionTitle = needTitle;
+                } else {
+                    sessionTitle = "AI 레시피 제안";
+                }
 
-        Recipe e = new Recipe();
-        e.setMemberId(memberId);
-        e.setName(sessionTitle);
-        e.setDetail(payload);
-        recipeRepository.save(e);
+                String payload;
+                try {
+                    payload = mapper.writeValueAsString(ai);
+                } catch (Exception e) {
+                    log.warn("[AI] serialize 실패: {}", e.toString());
+                    payload = emptyPayloadJson();
+                }
+
+                // DB 업데이트
+                Recipe s = recipeRepository.findById(session.getId()).orElseThrow();
+                s.setName(sessionTitle);
+                s.setDetail(payload);
+                recipeRepository.save(s);
+                log.info("[AI-ASYNC] 완료 sessionId={} title={}", s.getId(), sessionTitle);
+            } catch (Exception ex) {
+                log.warn("[AI-ASYNC] 실패 sessionId={} : {}", session.getId(), ex.toString());
+            } finally {
+                generatingSessions.remove(session.getId());
+            }
+        });
 
         Map<String, Object> ret = new HashMap<>();
-        ret.put("id", e.getId());
-        ret.put("title", e.getName());
+        ret.put("id", session.getId());
+        ret.put("title", session.getName()); // "레시피 생성중…"
         return ret;
+    }
+
+    private String emptyPayloadJson() {
+        return "{\"notice\":\"\",\"have\":[],\"need\":[]}";
     }
 
     // ---------- 목록 조회 ----------
@@ -184,51 +220,6 @@ public class RecipeService {
         return base.stream().map(this::toSuggestion).toList();
     }
 
-    // ---------- 다른 레시피 추천 (세션 DB 반영) ----------
-    @Transactional
-    public void recommendMore(Long memberId, Long sessionId, String filter) {
-        Set<String> selected = lastSelectedByMember.get(memberId);
-        if (selected == null || selected.isEmpty()) return;
-
-        Set<String> avoidHave = generatedTitlesHave.computeIfAbsent(memberId, k -> new HashSet<>());
-        Set<String> avoidNeed = generatedTitlesNeed.computeIfAbsent(memberId, k -> new HashSet<>());
-        Health health = getMemberHealth(memberId);
-
-        AiResponse aiNew = callAi(memberId, selected, avoidHave, avoidNeed, health);
-        AiResponse current = lastAiResponse.getOrDefault(memberId, new AiResponse());
-
-        // ★ 각 섹션당 1개만 추가 (속도 개선)
-        if (filter == null || "have".equalsIgnoreCase(filter)) {
-            if (!aiNew.have.isEmpty()) current.have.add(aiNew.have.get(0));
-        }
-        if (filter == null || "need".equalsIgnoreCase(filter)) {
-            if (!aiNew.need.isEmpty()) current.need.add(aiNew.need.get(0));
-        }
-
-        lastAiResponse.put(memberId, current);
-
-        avoidHave.addAll(
-                current.have.stream().map(r -> r.title).filter(Objects::nonNull).toList()
-        );
-        avoidNeed.addAll(
-                current.need.stream().map(r -> r.title).filter(Objects::nonNull).toList()
-        );
-
-        // ★ 세션 detail JSON도 갱신/저장 → 상세 재조회 시 반영되도록
-        Recipe session = recipeRepository.findById(sessionId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 세션"));
-        if (!Objects.equals(session.getMemberId(), memberId)) {
-            throw new IllegalArgumentException("본인 세션만 갱신할 수 있습니다.");
-        }
-        try {
-            String payload = mapper.writeValueAsString(current);
-            session.setDetail(payload);
-            recipeRepository.save(session);
-        } catch (Exception e) {
-            log.warn("[AI] recommendMore serialize 실패: {}", e.toString());
-        }
-    }
-
     // ---------- Spring AI 호출 ----------
     private AiResponse callAi(Long memberId,
                               Set<String> haveNow,
@@ -245,13 +236,8 @@ public class RecipeService {
                             JSON 이외의 문자는 출력하지 마세요.
                             """)
                     .user(prompt)
-                    // temperature 는 application 설정 사용
                     .call()
                     .content();
-
-            String snippet = raw == null ? "null" :
-                    (raw.length() > 2000 ? raw.substring(0, 2000) + "...(truncated)" : raw);
-            log.info("[AI] raw length={} snippet=\n{}", raw == null ? 0 : raw.length(), snippet);
 
             String json = extractJson(raw);
             if (json == null || json.isBlank()) {
@@ -346,6 +332,7 @@ public class RecipeService {
         return false;
     }
 
+    /** 프롬프트 — 다양성 강화 & 기본재료/제목 편중 방지 */
     private String buildPrompt(Set<String> haveNow,
                                Set<String> avoidHave,
                                Set<String> avoidNeed,
@@ -376,27 +363,28 @@ public class RecipeService {
                   → 이 항목들은 need에 넣지 말고 **ingredients.seasoning = '기본 재료'** 목록에만 기입합니다.
                   → **특히 '밥/흰쌀밥/쌀/물'은 need에 절대 넣지 마세요.** 물은 필요 시 seasoning(예: "물 120ml")로만 표기합니다.
                   → **약어 금지:** '1t/1T' 대신 **'1작은술/1큰술'**로 표기하고, ml/g 단위는 숫자+단위로 적습니다.
-                  → 저염/당 조절 등 건강 정보가 있으면 사용량을 낮추거나 대안을 steps에 명시합니다.
 
                 [이미 제안된 제목(중복 금지)]
                 - have: %s
                 - need: %s
 
+                [다양성 규칙]
+                - 제목과 조리법의 **카테고리를 다양화**하세요. '볶음밥/전/국' 같은 동일 계열 반복 금지.
+                - 6개 제안 전체에 최소한 다음 중 **서로 다른 4개 이상**을 포함: 볶기, 조림, 무침, 찜/푹삶기, 구이/오븐/에어프라이어, 샐러드/차가운 요리, 토스트/샌드위치/랩, 스튜/전골, 면요리.
+                - **제목에 동일 키워드 반복(예: "볶음밥", "전", "국")이 2회를 넘지 않도록** 조절합니다.
+                - 밥이 기본 재료이므로, 'need' 섹션의 레시피 제목에도 밥을 전제로 한 메뉴(볶음밥/덮밥 등) 편중을 피하세요.
+
                 [생성 규칙]
-                1) "have": haveNow만 사용해서 가능한 레시피 **정확히 3개**.
+                1) "have": haveNow만 사용해서 가능한 레시피 **정확히 5개**.
                    - ingredients.have: haveNow 중 실제 사용한 항목(중복 금지).
                    - ingredients.need: [] (항상 빈 배열)
                    - seasoning: 예) "간장 1큰술", "설탕 1작은술", "물 120ml", "올리브유 1큰술"
-                2) "need": haveNow를 기반으로 **추가 재료 1~3개**만 더해 가능한 레시피 **정확히 3개**.
+                2) "need": haveNow를 기반으로 **추가 재료 1~3개**만 더해 가능한 레시피 **정확히 5개**.
                    - ingredients.have: haveNow 중 실제 사용한 항목(중복 금지).
                    - ingredients.need: haveNow와 겹치지 않는 1~3개(금지 재료 금지, **'밥/쌀/물' 포함 금지**).
                    - seasoning: 위와 동일한 표기 규칙(작은술/큰술).
                 3) **실재하는 레시피(혹은 합리적 변형)**만 제안합니다. 과장되거나 비현실적 조합 금지, 제목은 간결한 한국어.
-                4) steps는 **7~10단계**로 더 **자세하고 구체적**이어야 합니다. 각 단계에
-                   - 불 세기(약불/중불/강불) 또는 온도,
-                   - 시간(예: 2분, 30초),
-                   - 계량(예: 간장 1큰술, 물 120ml)을 포함하고,
-                   - 전처리/순서 이유/식감 포인트 등 **요리 팁**을 넣습니다.
+                4) steps는 **7~10단계**로 더 **자세하고 구체적**이어야 합니다.
                 5) 모든 배열 항목은 공백 제거 및 중복 없이 작성합니다.
 
                 [출력 JSON 스키마]
@@ -408,11 +396,11 @@ public class RecipeService {
                       "ingredients": {
                         "have": ["보유 재료 중 사용한 것(고유, 중복 없음)"],
                         "need": [],
-                        "seasoning": ["간장 1큰술", "설탕 1작은술", "물 120ml", "..."]  // 기본 재료
+                        "seasoning": ["간장 1큰술", "설탕 1작은술", "물 120ml", "..."]
                       },
                       "steps": ["1단계 ...", "2단계 ...", "...(7~10단계)"]
                     },
-                    { ... 총 3개 }
+                    { ... 총 5개 }
                   ],
                   "need": [
                     {
@@ -420,11 +408,11 @@ public class RecipeService {
                       "ingredients": {
                         "have": ["보유 재료 중 사용한 것(고유, 중복 없음)"],
                         "need": ["추가 필요한 재료 1~3개(보유/금지 재료와 절대 겹치지 않음, **밥/쌀/물 제외**)"],
-                        "seasoning": ["간장 1큰술", "물 150ml", "..."]  // 기본 재료
+                        "seasoning": ["간장 1큰술", "물 150ml", "..."]
                       },
                       "steps": ["1단계 ...", "2단계 ...", "...(7~10단계)"]
                     },
-                    { ... 총 3개 }
+                    { ... 총 5개 }
                   ]
                 }
                 """.formatted(
@@ -516,6 +504,8 @@ public class RecipeService {
         ret.put("have", ai.have.stream().map(this::toSuggestion).toList());
         ret.put("need", ai.need.stream().map(this::toSuggestion).toList());
         ret.put("notice", ai.notice == null ? "" : ai.notice);
+        // 프론트 폴링을 위한 생성중 플래그
+        ret.put("generating", generatingSessions.contains(id));
         return ret;
     }
 

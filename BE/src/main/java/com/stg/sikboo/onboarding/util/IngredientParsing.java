@@ -1,34 +1,33 @@
 package com.stg.sikboo.onboarding.util;
 
-import java.time.LocalDate;
-import java.util.*;
-import java.util.regex.*;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.stg.sikboo.onboarding.infra.TextSanitizer;
 
 public class IngredientParsing {
-    private static final Pattern DATE1 = Pattern.compile("^(.*?)/(\\d{4}-\\d{2}-\\d{2})$");
-    private static final Pattern DATE2 = Pattern.compile("^(.*?)\\((\\d{4}-\\d{2}-\\d{2})\\)$");
 
-    public record Parsed(String name, LocalDate due, boolean explicit) {}
-
-    public static List<Parsed> parseMany(List<String> lines) {
+    /** 쉼표 구분 입력을 토큰으로 나누고 각 토큰을 sanitize */
+    public static List<String> parseMany(List<String> lines) {
         if (lines == null) return List.of();
-        List<Parsed> out = new ArrayList<>();
+
+        List<String> result = new ArrayList<>();
+
         for (String line : lines) {
-            if (line == null) continue;
-            for (String token : line.split("\\s*,\\s*")) {
-                token = token.trim();
-                if (token.isBlank()) continue;
-                out.add(parseOne(token));
+            if (line == null || line.isBlank()) continue;
+
+            String cleanLine = TextSanitizer.sanitize(line);
+            if (cleanLine.isEmpty()) continue;
+
+            String[] tokens = cleanLine.split("\\s*,\\s*");
+            for (String token : tokens) {
+                String cleanToken = TextSanitizer.sanitize(token);
+                if (!cleanToken.isEmpty()) {
+                    result.add(cleanToken);
+                }
             }
         }
-        return out;
-    }
 
-    private static Parsed parseOne(String token) {
-        Matcher m1 = DATE1.matcher(token);
-        if (m1.matches()) return new Parsed(m1.group(1).trim(), LocalDate.parse(m1.group(2)), true);
-        Matcher m2 = DATE2.matcher(token);
-        if (m2.matches()) return new Parsed(m2.group(1).trim(), LocalDate.parse(m2.group(2)), true);
-        return new Parsed(token, null, false);
+        return result;
     }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import SectionTitle from '@/components/Recipe/SectionTitle';
@@ -22,19 +22,17 @@ export default function Recipes() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  // ---------- 탭 초기화 규칙 ----------
-  // 1) 다른 탭에서 /recipes 로 "처음" 진입하면 CREATE
-  // 2) 상세 -> 브라우저 뒤로가기(popstate) 시에는 기존 state 유지
-  // 구현: mount 시에만 CREATE로 강제, 이후엔 건드리지 않음
-  const [tab, setTab] = useState(Tab.CREATE);
-
-  useEffect(() => {
-    // mount 직후 한 번만 생성 탭으로 강제
-    setTab(Tab.CREATE);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // ▼ 최초 진입 시 기본 탭: sessionStorage → 기본값 CREATE
+  const initialTab = useMemo(
+    () => (sessionStorage.getItem('recipes.defaultTab') === Tab.LIST ? Tab.LIST : Tab.CREATE),
+    [],
+  );
+  const [tab, setTab] = useState(initialTab);
 
   const [selected, setSelected] = useState(() => new Set());
+
+  // ★ 생성 완료 대기용: 방 ID가 저장되면 상세를 폴링해 준비 완료를 감지
+  const [waitingSessionId, setWaitingSessionId] = useState(null);
 
   // 내 재료
   const my = useQuery({
@@ -53,12 +51,41 @@ export default function Recipes() {
   // 레시피 생성(세션 생성)
   const gen = useMutation({
     mutationFn: () => recipeApi.generateRecipes(Array.from(selected)),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qKeys.sessions });
+    onSuccess: (created) => {
+      // 선택 초기화
       setSelected(new Set());
-      setTab(Tab.LIST); // 생성 완료 후 목록으로
+      // 목록은 아직 가지 않음 —> 생성 완료될 때 이동
+      setWaitingSessionId(created?.id ?? null);
     },
   });
+
+  // ★ 생성 완료 대기: waitingSessionId가 있으면 상세를 폴링
+  const waitDetail = useQuery({
+    queryKey: waitingSessionId ? qKeys.sessionDetail(waitingSessionId) : ['noop'],
+    queryFn: () => recipeApi.getSessionDetail(waitingSessionId),
+    enabled: !!waitingSessionId,
+    refetchInterval: 1200, // 1.2s 폴링
+    refetchOnWindowFocus: true,
+  });
+
+  // ★ 상세 데이터가 준비되었는지 판별 (have/need 중 하나라도 채워지면 완료로 간주)
+  useEffect(() => {
+    if (!waitingSessionId) return;
+    if (waitDetail.isSuccess) {
+      const d = waitDetail.data || {};
+      const ready =
+        (Array.isArray(d.have) && d.have.length > 0) ||
+        (Array.isArray(d.need) && d.need.length > 0);
+      if (ready) {
+        // 목록 새로고침
+        qc.invalidateQueries({ queryKey: qKeys.sessions });
+        // 다음에 /recipes 들어오면 LIST가 초기 탭이 되도록 저장
+        sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
+        setTab(Tab.LIST);
+        setWaitingSessionId(null);
+      }
+    }
+  }, [waitingSessionId, waitDetail.isSuccess, waitDetail.data, qc]);
 
   // 세션 목록
   const sessions = useQuery({
@@ -76,7 +103,10 @@ export default function Recipes() {
         <h1 className="text-center text-lg font-bold">레시피</h1>
         <div className="mt-3 grid grid-cols-2 rounded-xl bg-slate-100 p-1 text-sm">
           <button
-            onClick={() => setTab(Tab.CREATE)}
+            onClick={() => {
+              sessionStorage.setItem('recipes.defaultTab', Tab.CREATE);
+              setTab(Tab.CREATE);
+            }}
             className={cx(
               'rounded-lg py-2',
               tab === Tab.CREATE ? 'bg-white font-semibold shadow' : 'text-slate-500',
@@ -85,7 +115,10 @@ export default function Recipes() {
             생성
           </button>
           <button
-            onClick={() => setTab(Tab.LIST)}
+            onClick={() => {
+              sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
+              setTab(Tab.LIST);
+            }}
             className={cx(
               'rounded-lg py-2',
               tab === Tab.LIST ? 'bg-white font-semibold shadow' : 'text-slate-500',
@@ -133,13 +166,17 @@ export default function Recipes() {
                 {sessions.data.map((room) => (
                   <button
                     key={room.id}
-                    onClick={() => navigate(`/recipes/sessions/${room.id}`)}
+                    onClick={() => {
+                      // 상세로 들어갔다가 뒤로가기 시 목록 탭으로 돌아오도록 설정
+                      sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
+                      navigate(`/recipes/sessions/${room.id}`);
+                    }}
                     className="w-full rounded-xl border bg-white px-4 py-3 text-left transition hover:bg-indigo-50"
                   >
                     <div className="flex items-center justify-between">
                       <div className="font-semibold">{room.title}</div>
                       <div className="text-xs text-slate-500">
-                        {new Date(room.createdAt).toLocaleString()}
+                        {room.createdAt ? new Date(room.createdAt).toLocaleString() : ''}
                       </div>
                     </div>
                   </button>
@@ -150,9 +187,9 @@ export default function Recipes() {
         )}
       </div>
 
-      {/* 생성 진행 중 오버레이 (컴포넌트 연동) */}
+      {/* 생성 진행 중 오버레이: '처음 생성' + 생성 완료 대기 동안 표시 */}
       <RecipeGeneratingOverlay
-        visible={gen.isPending}
+        visible={gen.isPending || !!waitingSessionId}
         message="레시피 생성중"
         blockPointer={true}
       />
@@ -163,7 +200,7 @@ export default function Recipes() {
           <div className="mx-auto max-w-full px-4 md:max-w-screen-md md:px-6 lg:max-w-4xl lg:px-8">
             <button
               onClick={() => gen.mutate()}
-              disabled={gen.isPending || selCount === 0}
+              disabled={gen.isPending || !!waitingSessionId || selCount === 0}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-4 text-white shadow-lg disabled:opacity-60"
             >
               레시피 생성

@@ -1,8 +1,12 @@
 package com.stg.sikboo.ingredient.presentation;
 
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,8 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException; // ★ 401 등 상태코드 직접 매핑용
 
 import com.stg.sikboo.ingredient.domain.IngredientLocation;
+import com.stg.sikboo.ingredient.dto.request.AnalyzeTextRequest;
 import com.stg.sikboo.ingredient.dto.request.CreateIngredientRequestDTO;
 import com.stg.sikboo.ingredient.dto.request.UpdateIngredientRequestDTO;
+import com.stg.sikboo.ingredient.dto.response.AnalyzeTextResponse;
+import com.stg.sikboo.ingredient.dto.response.IngredientItem;
 import com.stg.sikboo.ingredient.dto.response.IngredientResponseDTO;
 import com.stg.sikboo.ingredient.dto.response.PageResponseDTO;
 import com.stg.sikboo.ingredient.service.IngredientService;
@@ -39,7 +46,7 @@ public class IngredientController {
     		@RequestParam(name = "location", required = false) IngredientLocation location,
             @RequestParam(name = "q", required = false) String q,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "size", defaultValue = "10") int size,
             @RequestParam(name = "sort", required = false) String sort,
             @RequestParam(name = "order", required = false) String order
     ) {
@@ -76,6 +83,34 @@ public class IngredientController {
 
         Long id = service.create(memberId, req);
         return ResponseEntity.status(HttpStatus.CREATED).body(new IdRes(id));
+    }
+    
+    /**
+     * AI 자연어 분석
+     */
+    @PostMapping("/analyze-text")
+    public AnalyzeTextResponse analyzeText(
+        @AuthenticationPrincipal Jwt jwt,
+        @RequestBody AnalyzeTextRequest request
+    ) {
+        Long memberId = currentMemberId();
+        return service.analyzeText(memberId, request.getText());
+    }
+
+    /**
+     * AI 분석 결과 저장 (기존 재료에 추가)
+     */
+    @PostMapping("/add-from-ai")
+    public Map<String, String> addFromAi(
+        @AuthenticationPrincipal Jwt jwt,
+        @RequestBody Map<String, List<IngredientItem>> payload
+    ) {
+        Long memberId = currentMemberId();
+        List<IngredientItem> items = payload.get("items");
+        
+        service.addIngredientsFromAi(memberId, items);
+        
+        return Map.of("message", "저장되었습니다");
     }
 
     /** 수정: 부분수정 + 자신 제외 중복 검사 */
