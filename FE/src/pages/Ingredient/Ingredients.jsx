@@ -24,6 +24,32 @@ function formatDateIsoToYMD(iso) {
   }
 }
 
+// ✅ 소비기한 뱃지 컴포넌트
+const Badge = ({ daysLeft }) => {
+  if (daysLeft < 0) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+        D+{Math.abs(daysLeft)}
+      </span>
+    );
+  }
+  if (daysLeft === 0) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+        오늘까지
+      </span>
+    );
+  }
+  if (daysLeft <= 3) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
+        D-{daysLeft}
+      </span>
+    );
+  }
+  return null;
+};
+
 export default function Ingredients() {
   const nav = useNavigate();
   const [location, setLocation] = useState(null);
@@ -31,13 +57,11 @@ export default function Ingredients() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // ✅ 페이징 상태 추가
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const pageSize = 10;
 
-  // create modal
   const [openAdd, setOpenAdd] = useState(false);
   const [form, setForm] = useState({
     ingredientName: '',
@@ -46,7 +70,6 @@ export default function Ingredients() {
     memo: '',
   });
 
-  // detail modal (view / edit / delete)
   const [openDetail, setOpenDetail] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [detailForm, setDetailForm] = useState({
@@ -58,6 +81,8 @@ export default function Ingredients() {
 
   const fetchList = async (page = 0) => {
     setLoading(true);
+    setCurrentPage(page);
+
     try {
       const result = await listIngredients({
         location,
@@ -65,8 +90,9 @@ export default function Ingredients() {
         page,
         size: pageSize,
       });
+
       setItems(result.content || []);
-      setCurrentPage(result.number || 0);
+      setCurrentPage(result.number ?? page);
       setTotalPages(result.totalPages || 0);
       setTotalElements(result.totalElements || 0);
     } catch (e) {
@@ -78,7 +104,6 @@ export default function Ingredients() {
   };
 
   useEffect(() => {
-    setCurrentPage(0); // ✅ 필터 변경 시 첫 페이지로
     fetchList(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
@@ -87,7 +112,6 @@ export default function Ingredients() {
     if (!confirm(`${name} 을(를) 삭제하시겠습니까?`)) return;
     try {
       await deleteIngredient(id);
-      // ✅ 삭제 후 현재 페이지 재조회
       fetchList(currentPage);
       if (selectedItem?.id === id) {
         setOpenDetail(false);
@@ -119,15 +143,13 @@ export default function Ingredients() {
       await createIngredient(payload);
       setOpenAdd(false);
       setForm({ ingredientName: '', location: '냉장고', due: '', memo: '' });
-      fetchList(0); // ✅ 추가 후 첫 페이지로
-      setCurrentPage(0);
+      fetchList(0);
     } catch (err) {
       console.error(err);
       alert('재료 추가 중 오류가 발생했습니다.');
     }
   };
 
-  // 상세 모달 열기 (목록 항목 클릭)
   const openDetailModal = (item) => {
     setSelectedItem(item);
     setDetailForm({
@@ -158,17 +180,15 @@ export default function Ingredients() {
       await updateIngredient(selectedItem.id, payload);
       setOpenDetail(false);
       setSelectedItem(null);
-      fetchList(currentPage); // ✅ 수정 후 현재 페이지 재조회
+      fetchList(currentPage);
     } catch (err) {
       console.error(err);
       alert('수정 중 오류가 발생했습니다.');
     }
   };
 
-  // ✅ 페이지 변경 핸들러
   const handlePageChange = (newPage) => {
     if (newPage < 0 || newPage >= totalPages) return;
-    setCurrentPage(newPage);
     fetchList(newPage);
   };
 
@@ -196,7 +216,6 @@ export default function Ingredients() {
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    setCurrentPage(0);
                     fetchList(0);
                   }
                 }}
@@ -207,7 +226,6 @@ export default function Ingredients() {
                 <button
                   onClick={async () => {
                     setQ('');
-                    setCurrentPage(0);
                     try {
                       const result = await listIngredients({
                         location,
@@ -241,10 +259,7 @@ export default function Ingredients() {
               )}
             </div>
             <button
-              onClick={() => {
-                setCurrentPage(0);
-                fetchList(0);
-              }}
+              onClick={() => fetchList(0)}
               className="flex-shrink-0 rounded bg-[#5f0080] px-3 py-1 text-white"
               type="button"
             >
@@ -276,9 +291,12 @@ export default function Ingredients() {
                     className="flex cursor-pointer items-center justify-between border-b pb-2"
                   >
                     <div onClick={() => openDetailModal(it)} className="flex-1">
-                      <div className="mb-1 text-lg font-medium text-[#333]">
-                        {it.ingredientName}
+                      {/* ✅ 재료명과 뱃지를 같은 줄에 배치 */}
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="text-lg font-medium text-[#333]">{it.ingredientName}</span>
+                        <Badge daysLeft={it.daysLeft} />
                       </div>
+
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-[#999]">
                           {formatDateIsoToYMD(it.due)} 까지
@@ -330,12 +348,9 @@ export default function Ingredients() {
                 ))}
               </ul>
 
-              {/* ✅ 페이징 UI 개선 */}
               {totalPages > 1 && (
                 <div className="mt-6 flex flex-col items-center gap-3">
-                  {/* 페이지 버튼 */}
                   <div className="flex items-center gap-2">
-                    {/* 이전 페이지 */}
                     <button
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 0}
@@ -345,7 +360,6 @@ export default function Ingredients() {
                       ‹
                     </button>
 
-                    {/* 페이지 번호 */}
                     {Array.from({ length: totalPages }, (_, i) => i).map((pageNum) => {
                       if (
                         pageNum === 0 ||
@@ -376,7 +390,6 @@ export default function Ingredients() {
                       return null;
                     })}
 
-                    {/* 다음 페이지 */}
                     <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages - 1}
@@ -387,7 +400,6 @@ export default function Ingredients() {
                     </button>
                   </div>
 
-                  {/* 페이지 정보 (아래 줄) */}
                   <span className="text-sm text-gray-600">
                     {currentPage + 1} / {totalPages} 페이지 (전체 {totalElements}개)
                   </span>
@@ -465,7 +477,11 @@ export default function Ingredients() {
       {openDetail && selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <form onSubmit={handleUpdate} className="w-full max-w-md rounded-lg bg-white p-6">
-            <h3 className="mb-4 text-center text-lg font-bold">재료 상세</h3>
+            {/* ✅ 제목에 뱃지 추가 */}
+            <div className="mb-4 flex items-center justify-center gap-2">
+              <h3 className="text-lg font-bold">재료 상세</h3>
+              <Badge daysLeft={selectedItem.daysLeft} />
+            </div>
 
             <label className="mb-1 block text-sm">재료 이름</label>
             <input
