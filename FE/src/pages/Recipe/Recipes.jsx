@@ -6,7 +6,6 @@ import Skeleton from '@/components/Recipe/Skeleton';
 import Empty from '@/components/Recipe/Empty';
 import ErrorBox from '@/components/Recipe/ErrorBox';
 import IngredientRow from '@/components/Recipe/IngredientRow';
-import RecipeGeneratingOverlay from '@/components/ui/RecipeGeneratingOverlay';
 import recipeApi from '@/api/recipeApi';
 
 const Tab = { CREATE: 'CREATE', LIST: 'LIST' };
@@ -17,6 +16,9 @@ const qKeys = {
   sessions: ['recipes', 'sessions'],
   sessionDetail: (id) => ['recipes', 'session', id],
 };
+
+// 55초를 10등분(각 단계 약 5.5초)
+const STEP_INTERVAL_MS = 5_500;
 
 export default function Recipes() {
   const navigate = useNavigate();
@@ -31,8 +33,33 @@ export default function Recipes() {
 
   const [selected, setSelected] = useState(() => new Set());
 
-  // ★ 생성 완료 대기용: 방 ID가 저장되면 상세를 폴링해 준비 완료를 감지
-  const [waitingSessionId, setWaitingSessionId] = useState(null);
+  // ★ sessionStorage 에 남아 있던 대기중 세션 복원
+  const [waitingSessionId, setWaitingSessionId] = useState(() => {
+    const storedId = sessionStorage.getItem('recipes.waitingSessionId');
+    return storedId ? Number(storedId) : null;
+  });
+
+  // ★ 진행중 여부 복원
+  const [isGeneratingPersist, setIsGeneratingPersist] = useState(() => {
+    return sessionStorage.getItem('recipes.isGenerating') === 'true';
+  });
+
+  // ★ 진행 단계 복원 (시간 경과 기준 재계산)
+  const [progressStep, setProgressStep] = useState(() => {
+    const startedAtStr = sessionStorage.getItem('recipes.progressStartedAt');
+    if (!startedAtStr) return 0;
+    const startedAt = Number(startedAtStr);
+    if (!Number.isFinite(startedAt)) return 0;
+
+    const elapsed = Date.now() - startedAt;
+    const step = Math.min(10, Math.max(1, Math.floor(elapsed / STEP_INTERVAL_MS) + 1));
+    // step 값을 storage에도 다시 써둠(복원 시 정합성)
+    sessionStorage.setItem('recipes.progressStep', String(step));
+    return step;
+  });
+
+  // percent는 항상 step에서 계산 (불일치 방지)
+  const progressPercent = Math.min(progressStep * 10, 100);
 
   // 내 재료
   const my = useQuery({
@@ -51,13 +78,45 @@ export default function Recipes() {
   // 레시피 생성(세션 생성)
   const gen = useMutation({
     mutationFn: () => recipeApi.generateRecipes(Array.from(selected)),
+    onMutate: () => {
+      // 진행률 관련 상태 및 저장값 초기화
+      setProgressStep(0);
+      setIsGeneratingPersist(false);
+      sessionStorage.removeItem('recipes.progressStartedAt');
+      sessionStorage.removeItem('recipes.progressStep');
+      sessionStorage.removeItem('recipes.waitingSessionId');
+      sessionStorage.removeItem('recipes.isGenerating');
+    },
     onSuccess: (created) => {
       // 선택 초기화
       setSelected(new Set());
-      // 목록은 아직 가지 않음 —> 생성 완료될 때 이동
-      setWaitingSessionId(created?.id ?? null);
+
+      const newId = created?.id ?? null;
+      if (newId) {
+        const now = Date.now();
+
+        setWaitingSessionId(newId);
+        setIsGeneratingPersist(true);
+
+        sessionStorage.setItem('recipes.waitingSessionId', String(newId));
+        sessionStorage.setItem('recipes.progressStartedAt', String(now));
+        sessionStorage.setItem('recipes.progressStep', '1');
+        sessionStorage.setItem('recipes.isGenerating', 'true');
+
+        setProgressStep(1);
+      }
+
+      // 생성 탭 → 바로 목록 탭으로 이동
+      sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
+      setTab(Tab.LIST);
+
+      // 새 방이 바로 목록에 보이도록 세션 목록 리패치
+      qc.invalidateQueries({ queryKey: qKeys.sessions });
     },
   });
+
+  // 생성/대기 중인지 전역 플래그
+  const generatingVisible = gen.isPending || isGeneratingPersist || !!waitingSessionId;
 
   // ★ 생성 완료 대기: waitingSessionId가 있으면 상세를 폴링
   const waitDetail = useQuery({
@@ -76,16 +135,46 @@ export default function Recipes() {
       const ready =
         (Array.isArray(d.have) && d.have.length > 0) ||
         (Array.isArray(d.need) && d.need.length > 0);
+
       if (ready) {
+        // 완료 시에는 10/10 로 세팅
+        setProgressStep(10);
+        sessionStorage.setItem('recipes.progressStep', '10');
+
         // 목록 새로고침
         qc.invalidateQueries({ queryKey: qKeys.sessions });
-        // 다음에 /recipes 들어오면 LIST가 초기 탭이 되도록 저장
         sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
         setTab(Tab.LIST);
+
+        // 진행 상태 종료
         setWaitingSessionId(null);
+        setIsGeneratingPersist(false);
+        sessionStorage.removeItem('recipes.waitingSessionId');
+        sessionStorage.removeItem('recipes.progressStartedAt');
+        sessionStorage.removeItem('recipes.progressStep');
+        sessionStorage.removeItem('recipes.isGenerating');
       }
     }
   }, [waitingSessionId, waitDetail.isSuccess, waitDetail.data, qc]);
+
+  // ★ progress 애니메이션: generatingVisible 동안 55초에 걸쳐 step 0→10
+  useEffect(() => {
+    if (!generatingVisible) {
+      setProgressStep(0);
+      return;
+    }
+
+    const id = setInterval(() => {
+      setProgressStep((prev) => {
+        if (prev >= 10) return prev;
+        const next = prev === 0 ? 1 : prev + 1;
+        sessionStorage.setItem('recipes.progressStep', String(next));
+        return next;
+      });
+    }, STEP_INTERVAL_MS);
+
+    return () => clearInterval(id);
+  }, [generatingVisible]);
 
   // 세션 목록
   const sessions = useQuery({
@@ -163,36 +252,70 @@ export default function Recipes() {
               <Empty text="아직 생성된 방이 없어요. 생성 탭에서 만들어보세요!" />
             ) : (
               <div className="mb-10 space-y-2">
-                {sessions.data.map((room) => (
-                  <button
-                    key={room.id}
-                    onClick={() => {
-                      // 상세로 들어갔다가 뒤로가기 시 목록 탭으로 돌아오도록 설정
-                      sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
-                      navigate(`/recipes/sessions/${room.id}`);
-                    }}
-                    className="w-full rounded-xl border bg-white px-4 py-3 text-left transition hover:bg-indigo-50"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold">{room.title}</div>
-                      <div className="text-xs text-slate-500">
-                        {room.createdAt ? new Date(room.createdAt).toLocaleString() : ''}
+                {sessions.data.map((room) => {
+                  const isCurrentGeneratingRoom =
+                    waitingSessionId != null && room.id === waitingSessionId && generatingVisible;
+
+                  const createdAtText = room.createdAt
+                    ? new Date(room.createdAt).toLocaleString()
+                    : '';
+
+                  return (
+                    <button
+                      key={room.id}
+                      type="button"
+                      disabled={isCurrentGeneratingRoom}
+                      onClick={() => {
+                        if (isCurrentGeneratingRoom) return; // 생성중이면 진입 막기
+                        sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
+                        navigate(`/recipes/sessions/${room.id}`);
+                      }}
+                      className={cx(
+                        'w-full rounded-xl border px-4 py-3 text-left transition',
+                        isCurrentGeneratingRoom
+                          ? 'cursor-not-allowed bg-gradient-to-r from-emerald-100 via-emerald-50 to-emerald-100 opacity-95'
+                          : 'bg-white hover:bg-indigo-50',
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {/* 생성중일 때는 항상 이 텍스트로 & 깜빡이게 */}
+                          <span
+                            className={cx(
+                              'font-semibold',
+                              isCurrentGeneratingRoom && 'animate-pulse text-black',
+                            )}
+                          >
+                            {isCurrentGeneratingRoom ? '레시피 생성중…' : room.title}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500">{createdAtText}</div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+
+                      {/* 이 방이 현재 생성중일 때만 진행률 바 노출 */}
+                      {isCurrentGeneratingRoom && (
+                        <div className="mt-2">
+                          <div className="mb-1 flex items-center justify-between text-[11px] text-slate-600">
+                            <span>
+                              진행률 {progressStep}/10 ({progressPercent}%)
+                            </span>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
+                            <div
+                              className="h-full rounded-full bg-emerald-400 transition-all duration-500 ease-out"
+                              style={{ width: `${progressPercent}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </>
         )}
       </div>
-
-      {/* 생성 진행 중 오버레이: '처음 생성' + 생성 완료 대기 동안 표시 */}
-      <RecipeGeneratingOverlay
-        visible={gen.isPending || !!waitingSessionId}
-        message="레시피 생성중"
-        blockPointer={true}
-      />
 
       {/* 하단 슬라이드 업 바는 선택이 있을 때만 렌더(네브바 간섭 방지) */}
       {selCount > 0 && (
@@ -200,7 +323,7 @@ export default function Recipes() {
           <div className="mx-auto max-w-full px-4 md:max-w-screen-md md:px-6 lg:max-w-4xl lg:px-8">
             <button
               onClick={() => gen.mutate()}
-              disabled={gen.isPending || !!waitingSessionId || selCount === 0}
+              disabled={gen.isPending || generatingVisible || selCount === 0}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-4 text-white shadow-lg disabled:opacity-60"
             >
               레시피 생성
