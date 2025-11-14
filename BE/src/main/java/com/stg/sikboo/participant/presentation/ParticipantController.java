@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.stg.sikboo.groupbuying.domain.GroupBuying.Category;
+import com.stg.sikboo.groupbuying.dto.response.GroupBuyingPageResponse;
 import com.stg.sikboo.participant.dto.response.MyGroupBuyingResponse;
 import com.stg.sikboo.participant.dto.request.ParticipantJoinRequest;
 import com.stg.sikboo.participant.dto.response.ParticipantResponse;
@@ -87,5 +89,29 @@ public class ParticipantController {
     public ResponseEntity<Long> countParticipants(@PathVariable("groupBuyingId") Long groupBuyingId) {
         long count = participantService.countParticipants(groupBuyingId);
         return ResponseEntity.ok(count);
+    }
+    
+    /**
+     * 내가 참여한 공동구매 목록 조회 (필터링 및 페이징)
+     * Query String 파라미터:
+     * - memberId: 회원 ID (필수)
+     * - search: 검색어 (제목)
+     * - category: 카테고리 (FRUIT, VEGETABLE, MEAT, SEAFOOD, DAIRY, ETC)
+     * - page: 페이지 번호 (0부터 시작)
+     * - size: 페이지 크기 (기본 20)
+     */
+    @GetMapping("/my/search")
+    public ResponseEntity<GroupBuyingPageResponse> searchMyParticipatingGroupBuyings(
+            @RequestParam Long memberId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Category category,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        GroupBuyingPageResponse response = participantService.getMyParticipatingGroupBuyingsWithFilters(
+                memberId, search, category, page, size
+        );
+        
+        return ResponseEntity.ok(response);
     }
 }

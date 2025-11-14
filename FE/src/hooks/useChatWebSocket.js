@@ -1,20 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { useChatMessages } from '@/hooks/useChat';
+import { useChatMessagesPaginated, chatKeys } from '@/hooks/useChat';
 
 const WEBSOCKET_URL = `${import.meta.env.VITE_API_BASE_URL}/ws`;
 
 /**
- * 채팅 전용 WebSocket Hook
+ * 채팅 전용 WebSocket Hook (Cursor-based Pagination)
  * @param {string|number} groupBuyingId - 공동구매 ID
  * @param {number} currentUserId - 현재 사용자 ID
  * @returns {object} 채팅 메시지 및 전송 함수
  */
 export const useChatWebSocket = (groupBuyingId, currentUserId) => {
   const queryClient = useQueryClient();
-  const [messages, setMessages] = useState([]);
   const {
     isConnected,
     error,
@@ -24,18 +23,11 @@ export const useChatWebSocket = (groupBuyingId, currentUserId) => {
     sendMessage: wsSendMessage,
   } = useWebSocket(WEBSOCKET_URL);
 
-  // 초기 메시지 로드 (한 번만, 폴링 없음)
-  const { data: initialMessages = [], isLoading } = useChatMessages(groupBuyingId, {
-    staleTime: Infinity, // 캐시를 무한대로 유지 (WebSocket으로 실시간 업데이트)
-    refetchInterval: false, // 폴링 비활성화
-  });
+  // Cursor-based Pagination으로 메시지 로드
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+    useChatMessagesPaginated(groupBuyingId);
 
-  // 초기 메시지 설정
-  useEffect(() => {
-    if (initialMessages.length > 0) {
-      setMessages(initialMessages);
-    }
-  }, [initialMessages]);
+  const messages = data?.messages || [];
 
   // WebSocket 연결
   useEffect(() => {
@@ -60,12 +52,21 @@ export const useChatWebSocket = (groupBuyingId, currentUserId) => {
     const unsubscribe = subscribe(destination, (newMessage) => {
       console.log('새 메시지 수신:', newMessage);
 
-      // 로컬 상태에 메시지 추가
-      setMessages((prev) => [...prev, newMessage]);
+      // React Query 무한 스크롤 캐시에 새 메시지 추가
+      queryClient.setQueryData(chatKeys.messagesPaginated(groupBuyingId), (oldData) => {
+        if (!oldData) return oldData;
 
-      // React Query 캐시도 업데이트
-      queryClient.setQueryData(['chat', 'messages', String(groupBuyingId)], (old = []) => {
-        return [...old, newMessage];
+        // 첫 번째 페이지(최신 페이지)에 새 메시지 추가
+        const newPages = [...oldData.pages];
+        newPages[0] = {
+          ...newPages[0],
+          messages: [...newPages[0].messages, newMessage],
+        };
+
+        return {
+          ...oldData,
+          pages: newPages,
+        };
       });
     });
 
@@ -117,5 +118,9 @@ export const useChatWebSocket = (groupBuyingId, currentUserId) => {
     isConnected,
     isLoading,
     error,
+    // 무한 스크롤 관련
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
   };
 };

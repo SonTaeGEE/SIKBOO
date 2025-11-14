@@ -1,14 +1,17 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import LocationPickerModal from '@/components/GroupBuying/LocationPickerModal';
 import GroupBuyingForm from '@/components/GroupBuying/GroupBuyingForm';
-import { useCreateGroupBuying } from '@/hooks/useGroupBuying';
+import { useGroupBuying, useUpdateGroupBuying } from '@/hooks/useGroupBuying';
 import { useCurrentUser } from '@/hooks/useUser';
 import { formatNumber } from '@/utils/formatter';
 import { formatKSTDateTime } from '@/utils/formatKSTDateTime';
+import Loading from '@/components/common/Loading';
+import EmptyState from '@/components/common/EmptyState';
 
-const CreateGroupBuying = () => {
+const EditGroupBuying = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
@@ -20,24 +23,48 @@ const CreateGroupBuying = () => {
     deadline: '',
     description: '',
   });
-  // 로그인한 사용자 ID 가져오기
+
+  // 로그인한 사용자 정보
   const { data: currentUser } = useCurrentUser();
 
-  // 공동구매 생성 Mutation
-  const createMutation = useCreateGroupBuying();
+  // 공동구매 상세 정보 가져오기
+  const { data: groupBuying, isLoading, error } = useGroupBuying(id);
 
-  // 성공/에러 처리
-  const handleMutationSuccess = (data) => {
-    alert('공동구매가 생성되었습니다!');
-    // replace: true로 히스토리 스택에서 생성 페이지를 대체
-    // 뒤로가기 시 목록 페이지로 이동
-    navigate(`/group-buying/detail/${data.groupBuyingId}`, { replace: true });
-  };
+  // 공동구매 수정 Mutation
+  const updateMutation = useUpdateGroupBuying();
 
-  const handleMutationError = (error) => {
-    console.error('공동구매 생성 실패:', error);
-    alert(error.response?.data?.message || '공동구매 생성에 실패했습니다.');
-  };
+  // 공동구매 데이터 로드 시 폼 초기화
+  useEffect(() => {
+    if (groupBuying) {
+      // 주최자 확인
+      if (currentUser && groupBuying.memberId !== currentUser.id) {
+        alert('수정 권한이 없습니다.');
+        navigate(`/group-buying/detail/${id}`);
+        return;
+      }
+
+      // 폼 데이터 설정
+      setFormData({
+        name: groupBuying.title || '',
+        totalPrice: formatNumber(String(groupBuying.totalPrice || '')),
+        maxParticipants: String(groupBuying.maxPeople || ''),
+        deadline: groupBuying.deadline ? groupBuying.deadline.slice(0, 16) : '',
+        description: groupBuying.info || '',
+      });
+
+      // 카테고리 설정
+      setSelectedCategory(groupBuying.category || '');
+
+      // 위치 설정
+      if (groupBuying.pickupLatitude && groupBuying.pickupLongitude) {
+        setSelectedLocation({
+          lat: groupBuying.pickupLatitude,
+          lng: groupBuying.pickupLongitude,
+          address: groupBuying.pickupLocation,
+        });
+      }
+    }
+  }, [groupBuying, currentUser, id, navigate]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -90,6 +117,15 @@ const CreateGroupBuying = () => {
       alert('최대 인원을 입력해주세요.');
       return;
     }
+
+    // 현재 참여 인원보다 적게 설정할 수 없음
+    if (groupBuying && maxParticipantsNumber < groupBuying.currentPeople) {
+      alert(
+        `최대 인원은 현재 참여 인원(${groupBuying.currentPeople}명)보다 작을 수 없습니다.`,
+      );
+      return;
+    }
+
     if (!selectedLocation) {
       alert('수령 장소를 선택해주세요.');
       return;
@@ -100,13 +136,7 @@ const CreateGroupBuying = () => {
     }
 
     // API 요청 데이터 구성
-    if (!currentUser || !currentUser.id) {
-      alert('로그인이 필요합니다.');
-      return;
-    }
-
     const requestData = {
-      memberId: currentUser.id,
       title: formData.name,
       category: selectedCategory,
       totalPrice: totalPriceNumber,
@@ -119,11 +149,39 @@ const CreateGroupBuying = () => {
     };
 
     // Mutation 실행
-    createMutation.mutate(requestData, {
-      onSuccess: handleMutationSuccess,
-      onError: handleMutationError,
-    });
+    updateMutation.mutate(
+      { id, data: requestData },
+      {
+        onSuccess: () => {
+          alert('공동구매가 수정되었습니다!');
+          navigate(`/group-buying/detail/${id}`);
+        },
+        onError: (error) => {
+          console.error('공동구매 수정 실패:', error);
+          alert(error.response?.data?.message || '공동구매 수정에 실패했습니다.');
+        },
+      },
+    );
   };
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto min-h-screen max-w-2xl p-4">
+        <Loading message="공동구매 정보를 불러오는 중..." />
+      </div>
+    );
+  }
+
+  if (error || !groupBuying) {
+    return (
+      <div className="mx-auto min-h-screen max-w-2xl p-4">
+        <EmptyState
+          message="공동구매 정보를 불러올 수 없습니다."
+          onBack={() => navigate('/group-buying')}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto min-h-full max-w-2xl p-4">
@@ -137,8 +195,11 @@ const CreateGroupBuying = () => {
           onCategoryChange={setSelectedCategory}
           onLocationModalOpen={() => setIsLocationModalOpen(true)}
           onSubmit={handleSubmit}
-          isSubmitting={createMutation.isPending}
-          submitButtonText="공동구매 만들기"
+          onCancel={() => navigate(`/group-buying/detail/${id}`)}
+          isSubmitting={updateMutation.isPending}
+          submitButtonText="수정 완료"
+          showCurrentPeople={true}
+          currentPeople={groupBuying?.currentPeople || 0}
         />
 
         {/* 위치 선택 모달 */}
@@ -153,4 +214,4 @@ const CreateGroupBuying = () => {
   );
 };
 
-export default CreateGroupBuying;
+export default EditGroupBuying;

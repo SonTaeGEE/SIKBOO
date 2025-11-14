@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MapPin, MessageCircle, Users, Clock, ShoppingBag } from 'lucide-react';
+import { MapPin, MessageCircle, Users, Clock, ShoppingBag, Edit2, Trash2 } from 'lucide-react';
+
 import { getTimeRemaining } from '@/lib/dateUtils';
 import {
   useGroupBuying,
@@ -7,15 +9,18 @@ import {
   useCheckParticipation,
   useJoinGroupBuying,
   useLeaveGroupBuying,
+  useDeleteGroupBuying,
 } from '@/hooks/useGroupBuying';
 import { useCurrentUser } from '@/hooks/useUser';
 import Loading from '@/components/common/Loading';
 import EmptyState from '@/components/common/EmptyState';
 import ParticipantList from '@/components/GroupBuying/ParticipantList';
+import GroupBuyingDeleteModal from '@/components/GroupBuying/GroupBuyingDeleteModal';
 
 const GroupBuyingDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // 사용자 정보
   const { data: currentUser } = useCurrentUser();
@@ -33,6 +38,7 @@ const GroupBuyingDetail = () => {
   // 참여/나가기 Mutation
   const joinMutation = useJoinGroupBuying();
   const leaveMutation = useLeaveGroupBuying();
+  const deleteMutation = useDeleteGroupBuying();
 
   const handleJoin = () => {
     if (!currentUser) {
@@ -71,6 +77,23 @@ const GroupBuyingDetail = () => {
     }
   };
 
+  const handleDelete = () => {
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        alert('공동구매가 삭제되었습니다.');
+        navigate('/group-buying');
+      },
+      onError: (error) => {
+        alert(error.response?.data?.message || '삭제에 실패했습니다.');
+      },
+    });
+    setShowDeleteDialog(false);
+  };
+
+  const handleEdit = () => {
+    navigate(`/group-buying/edit/${id}`);
+  };
+
   if (isLoadingGroupBuying || isLoadingParticipants) {
     return (
       <div className="mx-auto min-h-screen max-w-2xl p-4">
@@ -105,15 +128,35 @@ const GroupBuyingDetail = () => {
           <div className="mb-4">
             <div className="mb-2 flex items-start justify-between">
               <h3 className="text-xl font-bold text-gray-800">{groupBuying.title}</h3>
-              {groupBuying.status === '모집중' ? (
-                <span className="rounded-lg bg-purple-100 px-3 py-1 text-sm font-medium text-[#5f0080]">
-                  모집중
-                </span>
-              ) : (
-                <span className="rounded-lg bg-gray-100 px-3 py-1 text-sm font-medium text-gray-600">
-                  마감
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {groupBuying.status === 'RECRUITING' ? (
+                  <span className="rounded-lg bg-purple-100 px-3 py-1 text-sm font-medium text-[#5f0080]">
+                    모집중
+                  </span>
+                ) : (
+                  <span className="rounded-lg bg-gray-100 px-3 py-1 text-sm font-medium text-gray-600">
+                    마감
+                  </span>
+                )}
+                {isHost && (
+                  <div className="flex gap-1">
+                    <button
+                      onClick={handleEdit}
+                      className="rounded-lg p-2 text-gray-600 transition hover:bg-gray-100 hover:text-[#5f0080]"
+                      title="수정하기"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteDialog(true)}
+                      className="rounded-lg p-2 text-gray-600 transition hover:bg-gray-100 hover:text-red-500"
+                      title="삭제하기"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="mb-3 text-sm text-gray-500">주최자: {groupBuying.memberName}</div>
             <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -194,7 +237,7 @@ const GroupBuyingDetail = () => {
               )}
             </>
           ) : (
-            groupBuying.status === '모집중' && (
+            groupBuying.status === 'RECRUITING' && (
               <button
                 onClick={handleJoin}
                 disabled={joinMutation.isPending}
@@ -206,6 +249,13 @@ const GroupBuyingDetail = () => {
           )}
         </div>
       </div>
+
+      <GroupBuyingDeleteModal
+        showDeleteDialog={showDeleteDialog}
+        setShowDeleteDialog={setShowDeleteDialog}
+        handleDelete={handleDelete}
+        isPending={deleteMutation.isPending}
+      />
     </div>
   );
 };

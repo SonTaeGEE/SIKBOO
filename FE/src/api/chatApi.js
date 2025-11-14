@@ -10,9 +10,16 @@ export const sendChatMessage = async (data) => {
   return response.data;
 };
 
-// 특정 공동구매의 채팅 메시지 목록 조회
-export const getChatMessages = async (groupBuyingId) => {
-  const response = await axiosInstance.get(`/chat/groupbuying/${groupBuyingId}/messages`);
+// 특정 공동구매의 채팅 메시지 페이지네이션 조회
+export const getChatMessagesPaginated = async (groupBuyingId, cursor = null, size = 50) => {
+  const params = { size };
+  if (cursor !== null) {
+    params.cursor = cursor;
+  }
+  const response = await axiosInstance.get(
+    `/chat/groupbuying/${groupBuyingId}/messages/paginated`,
+    { params },
+  );
   return response.data;
 };
 
