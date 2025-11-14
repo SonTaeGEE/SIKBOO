@@ -7,6 +7,7 @@ import GroupBuying from '@/pages/GroupBuying/GroupBuying';
 import GroupBuyingDetail from '@/pages/GroupBuying/GroupBuyingDetail';
 import GroupBuyingChat from '@/pages/GroupBuying/GroupBuyingChat';
 import CreateGroupBuying from '@/pages/GroupBuying/CreateGroupBuying';
+import EditGroupBuying from '@/pages/GroupBuying/EditGroupBuying';
 import MyPage from '@/pages/MyPage/MyPage';
 import Login from '@/pages/Auth/Login';
 import Signup from '@/pages/Auth/Signup';
@@ -27,6 +28,9 @@ const AppRoutes = () => {
   const getHeaderConfig = () => {
     if (location.pathname === '/group-buying/create') {
       return { title: '식재료 공동구매 만들기', showBack: true, hideNav: false };
+    }
+    if (location.pathname.startsWith('/group-buying/edit/')) {
+      return { title: '공동구매 수정', showBack: true, hideNav: false };
     }
     if (location.pathname.startsWith('/group-buying/') && location.pathname.endsWith('/chat')) {
       return { title: '채팅', showBack: true, hideNav: true };
@@ -81,6 +85,7 @@ const AppRoutes = () => {
         <Route path="/group-buying/detail/:id" element={<GroupBuyingDetail />} />
         <Route path="/group-buying/:id/chat" element={<GroupBuyingChat />} />
         <Route path="/group-buying/create" element={<CreateGroupBuying />} />
+        <Route path="/group-buying/edit/:id" element={<EditGroupBuying />} />
         <Route path="/mypage" element={<MyPage />} />
       </Routes>
     </MainLayout>

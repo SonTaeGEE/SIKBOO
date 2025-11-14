@@ -15,7 +15,7 @@ const GroupBuyingCard = ({ item, showDistance = false }) => {
       <div className="p-4">
         <div className="mb-2 flex items-start justify-between">
           <h4 className="line-clamp-1 flex-1 text-lg font-medium text-[#333333]">{item.title}</h4>
-          {item.status === '모집중' ? (
+          {item.status === 'RECRUITING' ? (
             <div className="ml-2 rounded-full bg-[#5f0080] px-2 py-0.5 text-xs font-medium whitespace-nowrap text-white">
               모집중
             </div>
@@ -62,7 +62,10 @@ const GroupBuyingCard = ({ item, showDistance = false }) => {
               <p className="text-sm text-gray-500">1인당 예상 가격</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-gray-900">
-                  {(item.totalPrice / item.maxPeople).toLocaleString()}원
+                  {(item.totalPrice / item.maxPeople).toLocaleString('ko-KR', {
+                    maximumFractionDigits: 0,
+                  })}
+                  원
                 </span>
                 <span className="text-sm text-gray-400 line-through">
                   {item.totalPrice.toLocaleString()}원

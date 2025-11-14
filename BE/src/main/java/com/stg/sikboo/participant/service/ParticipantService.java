@@ -3,11 +3,16 @@ package com.stg.sikboo.participant.service;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.stg.sikboo.groupbuying.domain.GroupBuying;
 import com.stg.sikboo.groupbuying.domain.repository.GroupBuyingRepository;
+import com.stg.sikboo.groupbuying.dto.response.GroupBuyingPageResponse;
+import com.stg.sikboo.groupbuying.dto.response.GroupBuyingResponse;
 import com.stg.sikboo.member.domain.Member;
 import com.stg.sikboo.member.domain.MemberRepository;
 import com.stg.sikboo.participant.dto.response.MyGroupBuyingResponse;
@@ -47,7 +52,7 @@ public class ParticipantService {
         }
         
         // 4. 마감 여부 확인
-        if (groupBuying.getStatus() == GroupBuying.Status.마감) {
+        if (groupBuying.getStatus() == GroupBuying.Status.DEADLINE) {
             throw new IllegalStateException("마감된 공동구매입니다.");
         }
         
@@ -122,5 +127,44 @@ public class ParticipantService {
      */
     public long countParticipants(Long groupBuyingId) {
         return participantRepository.countByGroupBuying_GroupBuyingId(groupBuyingId);
+    }
+    
+    /**
+     * 내가 참여한 공동구매 목록을 필터링 및 페이징 조회
+     * 
+     * @param memberId 회원 ID
+     * @param search 검색어 (제목)
+     * @param category 카테고리
+     * @param page 페이지 번호 (0부터 시작)
+     * @param size 페이지 크기
+     * @return 페이지네이션된 공동구매 목록
+     */
+    public GroupBuyingPageResponse getMyParticipatingGroupBuyingsWithFilters(
+            Long memberId,
+            String search,
+            GroupBuying.Category category,
+            int page,
+            int size) {
+        
+        Pageable pageable = PageRequest.of(page, size);
+        
+        Page<GroupBuying> result = participantRepository.findMyParticipatingGroupBuyingsWithFilters(
+                memberId, search, category, pageable
+        );
+        
+        List<GroupBuyingResponse> content = result.getContent().stream()
+                .map(GroupBuyingResponse::from)
+                .collect(Collectors.toList());
+        
+        return GroupBuyingPageResponse.builder()
+                .content(content)
+                .totalPages(result.getTotalPages())
+                .totalElements(result.getTotalElements())
+                .number(result.getNumber())
+                .size(result.getSize())
+                .first(result.isFirst())
+                .last(result.isLast())
+                .hasNext(result.hasNext())
+                .build();
     }
 }

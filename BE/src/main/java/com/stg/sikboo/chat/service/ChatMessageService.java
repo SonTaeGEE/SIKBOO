@@ -1,14 +1,17 @@
 package com.stg.sikboo.chat.service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.stg.sikboo.chat.domain.ChatMessage;
 import com.stg.sikboo.chat.domain.repository.ChatMessageRepository;
 import com.stg.sikboo.chat.dto.request.ChatMessageCreateRequest;
+import com.stg.sikboo.chat.dto.response.ChatMessagePageResponse;
 import com.stg.sikboo.chat.dto.response.ChatMessageResponse;
 import com.stg.sikboo.groupbuying.domain.GroupBuying;
 import com.stg.sikboo.groupbuying.domain.repository.GroupBuyingRepository;
@@ -53,19 +56,53 @@ public class ChatMessageService {
     }
     
     /**
-     * 공동구매의 채팅 메시지 목록 조회
-     */
-    public List<ChatMessageResponse> getMessagesByGroupBuying(Long groupBuyingId) {
-        List<ChatMessage> messages = chatMessageRepository.findByGroupBuying_GroupBuyingIdOrderByCreatedAt(groupBuyingId);
-        return messages.stream()
-                .map(ChatMessageResponse::from)
-                .collect(Collectors.toList());
-    }
-    
-    /**
      * 공동구매의 채팅 메시지 개수 조회
      */
     public long countMessagesByGroupBuying(Long groupBuyingId) {
         return chatMessageRepository.countByGroupBuying_GroupBuyingId(groupBuyingId);
+    }
+    
+    /**
+     * Cursor-based Pagination으로 채팅 메시지 조회
+     * @param groupBuyingId 공동구매 ID
+     * @param cursor 커서 (null이면 최신 메시지부터)
+     * @param size 페이지 크기
+     * @return 페이지네이션된 채팅 메시지
+     */
+    public ChatMessagePageResponse getMessagesPaginated(Long groupBuyingId, Long cursor, int size) {
+        // 1개 더 가져와서 hasMore 판단
+        PageRequest pageRequest = PageRequest.of(0, size + 1);
+        
+        List<ChatMessage> messages;
+        if (cursor == null) {
+            // 초기 로드: 최신 메시지부터
+            messages = chatMessageRepository.findRecentMessages(groupBuyingId, pageRequest);
+        } else {
+            // 스크롤 업: cursor 이전 메시지
+            messages = chatMessageRepository.findMessagesBefore(groupBuyingId, cursor, pageRequest);
+        }
+        
+        // hasMore 판단
+        boolean hasMore = messages.size() > size;
+        if (hasMore) {
+            messages = messages.subList(0, size);
+        }
+        
+        // 메시지 역순 정렬 (오래된 것부터 최신 순으로)
+        Collections.reverse(messages);
+        
+        // nextCursor 계산 (가장 오래된 메시지 ID)
+        Long nextCursor = messages.isEmpty() ? null : messages.get(0).getMessageId();
+        
+        List<ChatMessageResponse> responses = messages.stream()
+                .map(ChatMessageResponse::from)
+                .collect(Collectors.toList());
+        
+        return ChatMessagePageResponse.builder()
+                .messages(responses)
+                .nextCursor(nextCursor)
+                .hasMore(hasMore)
+                .size(responses.size())
+                .build();
     }
 }

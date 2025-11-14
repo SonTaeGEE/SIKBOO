@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { MapPin, Search, Locate } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { MapPin, Search, Locate, X } from 'lucide-react';
+
 import { useKakaoMap } from '@/hooks/useKakaoMap';
+import { calculateDistance } from '@/utils/calculateDistance';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +23,7 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
   const [searchResults, setSearchResults] = useState([]);
   const [addressName, setAddressName] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef(null);
 
   const RADIUS_KM = 3; // 반경 3km
 
@@ -71,10 +74,11 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
           location = { lat: 36.3504, lng: 127.3845 };
         }
 
-        // 지도 생성
+        // 지도 생성 - initialLocation이 있으면 해당 위치 중심으로
+        const centerLocation = initialLocation || location;
         const container = mapRef.current;
         const options = {
-          center: new window.kakao.maps.LatLng(location.lat, location.lng),
+          center: new window.kakao.maps.LatLng(centerLocation.lat, centerLocation.lng),
           level: 5,
         };
 
@@ -118,7 +122,7 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
           const clickedLng = clickedPosition.getLng();
 
           // 현재 위치와의 거리 계산
-          const distance = getDistance(location.lat, location.lng, clickedLat, clickedLng);
+          const distance = calculateDistance(location.lat, location.lng, clickedLat, clickedLng);
 
           if (distance > RADIUS_KM) {
             alert(`현재 위치에서 ${RADIUS_KM}km 이내의 장소만 선택 가능합니다.`);
@@ -138,22 +142,15 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
     };
 
     initMap();
-  }, [isOpen, isLoaded]);
+  }, [isOpen, isLoaded, initialLocation]);
 
-  // 두 지점 간 거리 계산 (Haversine formula)
-  const getDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371; // 지구 반지름 (km)
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLng = ((lng2 - lng1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
+  // initialLocation이 있을 때 마커 복원
+  useEffect(() => {
+    if (map && initialLocation) {
+      updateSelectedMarker(initialLocation.lat, initialLocation.lng, map);
+      getAddressFromCoords(initialLocation.lat, initialLocation.lng);
+    }
+  }, [map, initialLocation]);
 
   // 선택 마커 업데이트
   const updateSelectedMarker = (lat, lng, kakaoMap) => {
@@ -186,44 +183,78 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
   };
 
   // 키워드로 장소 검색
+  const performSearch = useCallback(
+    (keyword) => {
+      if (!keyword.trim() || !map || !currentPosition) {
+        setSearchResults([]);
+        return;
+      }
+
+      setIsSearching(true);
+      const ps = new window.kakao.maps.services.Places();
+
+      // 현재 위치 중심으로 검색
+      const options = {
+        location: new window.kakao.maps.LatLng(currentPosition.lat, currentPosition.lng),
+        radius: RADIUS_KM * 1000, // 3km
+        size: 10,
+      };
+
+      ps.keywordSearch(
+        keyword,
+        (data, status) => {
+          setIsSearching(false);
+
+          if (status === window.kakao.maps.services.Status.OK) {
+            // 현재 위치 기준 3km 내의 결과만 필터링
+            const filtered = data.filter((place) => {
+              const distance = calculateDistance(
+                currentPosition.lat,
+                currentPosition.lng,
+                parseFloat(place.y),
+                parseFloat(place.x),
+              );
+              return distance <= RADIUS_KM;
+            });
+
+            setSearchResults(filtered);
+          } else {
+            setSearchResults([]);
+          }
+        },
+        options,
+      );
+    },
+    [map, currentPosition, RADIUS_KM],
+  );
+
+  // 디바운스된 검색
+  const handleSearchChange = (value) => {
+    setSearchKeyword(value);
+
+    // 기존 타이머 제거
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // 비어있으면 결과 초기화
+    if (!value.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    // 새 타이머 설정 (500ms 후 검색)
+    searchTimeoutRef.current = setTimeout(() => {
+      performSearch(value);
+    }, 500);
+  };
+
+  // 엔터키 검색 (즉시 검색)
   const handleSearch = () => {
-    if (!searchKeyword.trim() || !map || !currentPosition) return;
-
-    setIsSearching(true);
-    const ps = new window.kakao.maps.services.Places();
-
-    // 현재 위치 중심으로 검색
-    const options = {
-      location: new window.kakao.maps.LatLng(currentPosition.lat, currentPosition.lng),
-      radius: RADIUS_KM * 1000, // 3km
-      size: 10,
-    };
-
-    ps.keywordSearch(
-      searchKeyword,
-      (data, status) => {
-        setIsSearching(false);
-
-        if (status === window.kakao.maps.services.Status.OK) {
-          // 현재 위치 기준 3km 내의 결과만 필터링
-          const filtered = data.filter((place) => {
-            const distance = getDistance(
-              currentPosition.lat,
-              currentPosition.lng,
-              parseFloat(place.y),
-              parseFloat(place.x),
-            );
-            return distance <= RADIUS_KM;
-          });
-
-          setSearchResults(filtered);
-        } else {
-          setSearchResults([]);
-          alert('검색 결과가 없습니다.');
-        }
-      },
-      options,
-    );
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    performSearch(searchKeyword);
   };
 
   // 검색 결과 선택
@@ -297,11 +328,25 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
               <input
                 type="text"
                 value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                 placeholder="장소 검색 (예: 율량동 농협)"
-                className="w-full rounded-lg border border-gray-300 py-2 pr-4 pl-10 focus:border-[#5f0080] focus:ring-2 focus:ring-[#5f0080]/20 focus:outline-none"
+                className="w-full rounded-lg border border-gray-300 py-2 pr-10 pl-10 focus:border-[#5f0080] focus:ring-2 focus:ring-[#5f0080]/20 focus:outline-none"
               />
+              {searchKeyword && (
+                <button
+                  onClick={() => {
+                    setSearchKeyword('');
+                    setSearchResults([]);
+                    if (searchTimeoutRef.current) {
+                      clearTimeout(searchTimeoutRef.current);
+                    }
+                  }}
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={18} />
+                </button>
+              )}
             </div>
             <button
               onClick={handleSearch}
@@ -334,7 +379,7 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
                   </p>
                   <p className="text-xs text-gray-400">
                     현재 위치에서{' '}
-                    {getDistance(
+                    {calculateDistance(
                       currentPosition.lat,
                       currentPosition.lng,
                       parseFloat(place.y),

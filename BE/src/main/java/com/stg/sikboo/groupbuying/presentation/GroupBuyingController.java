@@ -15,8 +15,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.stg.sikboo.groupbuying.domain.GroupBuying.Category;
+import com.stg.sikboo.groupbuying.domain.GroupBuying.Status;
 import com.stg.sikboo.groupbuying.dto.request.GroupBuyingCreateRequest;
 import com.stg.sikboo.groupbuying.dto.request.GroupBuyingUpdateRequest;
+import com.stg.sikboo.groupbuying.dto.response.GroupBuyingPageResponse;
 import com.stg.sikboo.groupbuying.dto.response.GroupBuyingResponse;
 import com.stg.sikboo.groupbuying.service.GroupBuyingService;
 
@@ -105,6 +107,36 @@ public class GroupBuyingController {
     public ResponseEntity<Void> deleteGroupBuying(@PathVariable("id") Long id) {
         groupBuyingService.deleteGroupBuying(id);
         return ResponseEntity.noContent().build();
+    }
+    
+    /**
+     * 통합 필터링 및 페이징 조회 (무한 스크롤용)
+     * Query String 파라미터:
+     * - search: 검색어 (제목)
+     * - category: 카테고리 (FRUIT, VEGETABLE, MEAT, SEAFOOD, DAIRY, ETC)
+     * - status: 상태 (RECRUITING, DEADLINE)
+     * - lat: 사용자 위도
+     * - lng: 사용자 경도
+     * - distance: 최대 거리 (km)
+     * - page: 페이지 번호 (0부터 시작)
+     * - size: 페이지 크기 (기본 20)
+     */
+    @GetMapping("/search")
+    public ResponseEntity<GroupBuyingPageResponse> searchGroupBuyings(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Category category,
+            @RequestParam(required = false) Status status,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng,
+            @RequestParam(required = false) Double distance,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        GroupBuyingPageResponse response = groupBuyingService.getGroupBuyingsWithFilters(
+                search, category, status, lat, lng, distance, page, size
+        );
+        
+        return ResponseEntity.ok(response);
     }
     
 }

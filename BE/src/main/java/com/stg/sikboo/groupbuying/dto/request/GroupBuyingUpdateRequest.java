@@ -3,6 +3,7 @@ package com.stg.sikboo.groupbuying.dto.request;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.stg.sikboo.groupbuying.domain.GroupBuying.Category;
 
 import jakarta.validation.constraints.Positive;
@@ -35,5 +36,6 @@ public class GroupBuyingUpdateRequest {
     
     private BigDecimal pickupLongitude;
     
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS][XXX][X]", timezone = "Asia/Seoul")
     private LocalDateTime deadline;
 }

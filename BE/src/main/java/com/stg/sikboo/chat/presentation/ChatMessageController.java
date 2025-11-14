@@ -9,9 +9,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.stg.sikboo.chat.dto.request.ChatMessageCreateRequest;
+import com.stg.sikboo.chat.dto.response.ChatMessagePageResponse;
 import com.stg.sikboo.chat.dto.response.ChatMessageResponse;
 import com.stg.sikboo.chat.service.ChatMessageService;
 
@@ -36,13 +38,18 @@ public class ChatMessageController {
     }
     
     /**
-     * 특정 공동구매의 채팅 메시지 목록 조회
+     * 특정 공동구매의 채팅 메시지 페이지네이션 조회
+     * @param groupBuyingId 공동구매 ID
+     * @param cursor 커서 (이전 페이지의 nextCursor 값, null이면 최신 메시지부터)
+     * @param size 페이지 크기 (기본값: 50)
      */
-    @GetMapping("/groupbuying/{groupBuyingId}/messages")
-    public ResponseEntity<List<ChatMessageResponse>> getMessagesByGroupBuying(
-            @PathVariable("groupBuyingId") Long groupBuyingId) {
-        List<ChatMessageResponse> responses = chatMessageService.getMessagesByGroupBuying(groupBuyingId);
-        return ResponseEntity.ok(responses);
+    @GetMapping("/groupbuying/{groupBuyingId}/messages/paginated")
+    public ResponseEntity<ChatMessagePageResponse> getMessagesPaginated(
+            @PathVariable("groupBuyingId") Long groupBuyingId,
+            @RequestParam(required = false) Long cursor,
+            @RequestParam(defaultValue = "50") int size) {
+        ChatMessagePageResponse response = chatMessageService.getMessagesPaginated(groupBuyingId, cursor, size);
+        return ResponseEntity.ok(response);
     }
     
     /**

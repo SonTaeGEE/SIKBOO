@@ -48,7 +48,7 @@ public class GroupBuying {
     @JoinColumn(name = "member_id", nullable = false)
     private Member member;
 
-    @Column(name = "title", nullable = false, length = 100)
+    @Column(name = "title", nullable = false, length = 255)
     private String title;
 
     @Enumerated(EnumType.STRING)
@@ -111,7 +111,7 @@ public class GroupBuying {
             currentPeople = 0;
         }
         if (status == null) {
-            status = Status.모집중;
+            status = Status.RECRUITING;
         }
     }
 
@@ -120,12 +120,8 @@ public class GroupBuying {
         updatedAt = LocalDateTime.now();
         // participants 리스트 기반으로 currentPeople 자동 동기화
         this.currentPeople = calculateCurrentPeople();
-        // 상태 자동 업데이트
-        if (this.currentPeople >= this.maxPeople) {
-            this.status = Status.마감;
-        } else if (this.status == Status.마감) {
-            this.status = Status.모집중;
-        }
+        // 상태 자동 업데이트는 increaseCurrentPeople/decreaseCurrentPeople에서만 수행
+        // (closeByDeadline 등 다른 상태 변경을 방해하지 않도록)
     }
 
     public enum Category {
@@ -133,22 +129,82 @@ public class GroupBuying {
     }
 
     public enum Status {
-        모집중, 마감
+        RECRUITING, DEADLINE
     }
 
     // 비즈니스 로직 메서드
     public void increaseCurrentPeople() {
         this.currentPeople++;
         if (this.currentPeople >= this.maxPeople) {
-            this.status = Status.마감;
+            this.status = Status.DEADLINE;
         }
     }
 
     public void decreaseCurrentPeople() {
         if (this.currentPeople > 1) {
             this.currentPeople--;
-            if (this.status == Status.마감) {
-                this.status = Status.모집중;
+            if (this.status == Status.DEADLINE) {
+                this.status = Status.RECRUITING;
+            }
+        }
+    }
+    
+    /**
+     * 마감 시간이 지나서 자동으로 마감 처리
+     */
+    public void closeByDeadline() {
+        if (this.status == Status.RECRUITING) {
+            this.status = Status.DEADLINE;
+        }
+    }
+    
+    /**
+     * 현재 모집 중인지 확인 (마감시간도 체크)
+     */
+    public boolean isRecruiting() {
+        return this.status == Status.RECRUITING && 
+               this.deadline.isAfter(LocalDateTime.now());
+    }
+    
+    /**
+     * 공동구매 정보 수정
+     * 주최자만 수정 가능하며, 이미 참여한 인원보다 최대 인원을 적게 설정할 수 없음
+     */
+    public void update(
+            String title,
+            Category category,
+            Integer totalPrice,
+            Integer maxPeople,
+            String info,
+            String pickupLocation,
+            BigDecimal pickupLatitude,
+            BigDecimal pickupLongitude,
+            LocalDateTime deadline) {
+        
+        // 최대 인원 검증: 현재 참여 인원보다 적을 수 없음
+        if (maxPeople < this.currentPeople) {
+            throw new IllegalArgumentException(
+                String.format("최대 인원은 현재 참여 인원(%d명)보다 작을 수 없습니다.", this.currentPeople)
+            );
+        }
+        
+        this.title = title;
+        this.category = category;
+        this.totalPrice = totalPrice;
+        this.maxPeople = maxPeople;
+        this.info = info;
+        this.pickupLocation = pickupLocation;
+        this.pickupLatitude = pickupLatitude;
+        this.pickupLongitude = pickupLongitude;
+        this.deadline = deadline;
+        
+        // 최대 인원 도달 시 상태 변경
+        if (this.currentPeople >= this.maxPeople) {
+            this.status = Status.DEADLINE;
+        } else {
+            // 최대 인원을 늘려서 여유가 생긴 경우 다시 모집중으로 변경
+            if (this.status == Status.DEADLINE) {
+                this.status = Status.RECRUITING;
             }
         }
     }
