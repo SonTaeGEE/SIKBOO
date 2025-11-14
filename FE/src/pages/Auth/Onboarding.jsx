@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { submitOnboarding, skipOnboarding } from '@/api/authApi';
 import { analyzeIngredientText, addIngredientsFromAi } from '@/api/ingredientApi';
 import sikbooLogo from '@/assets/sikboo.png';
+import toast from 'react-hot-toast';
 
 const Onboarding = () => {
   const navigate = useNavigate();
@@ -32,7 +33,7 @@ const Onboarding = () => {
       navigate('/ingredients', { replace: true });
     } catch (error) {
       console.error('건너뛰기 실패:', error);
-      alert('오류가 발생했습니다. 다시 시도해주세요.');
+      toast.error('오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setLoading(false);
     }
@@ -45,7 +46,7 @@ const Onboarding = () => {
   // AI 분석 요청
   const handleAiAnalyze = async () => {
     if (!aiText.trim()) {
-      alert('내용을 입력해주세요.');
+      toast.error('내용을 입력해주세요.');
       return;
     }
 
@@ -64,7 +65,7 @@ const Onboarding = () => {
       setAiResult(result);
     } catch (error) {
       console.error('AI 분석 실패:', error);
-      alert('분석에 실패했습니다.');
+      toast.error('분석에 실패했습니다.');
     } finally {
       setLoading(false);
     }
@@ -109,7 +110,7 @@ const Onboarding = () => {
       if (mode === 'ai') {
         // --- AI 모드 ---
         if (!aiResult || !aiResult.items || aiResult.items.length === 0) {
-          alert('먼저 AI 분석을 진행해주세요.');
+          toast.error('먼저 AI 분석을 진행해주세요.');
           return;
         }
 
@@ -176,11 +177,11 @@ const Onboarding = () => {
     } catch (error) {
       console.error('제출 실패:', error);
       if (error?.response?.status === 401) {
-        alert('인증이 만료되었습니다. 다시 로그인해주세요.');
+        toast.error('인증이 만료되었습니다. 다시 로그인해주세요.');
         navigate('/login', { replace: true });
         return;
       }
-      alert('제출 중 오류가 발생했습니다. 다시 시도해주세요.');
+      toast.error('제출 중 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setLoading(false);
     }

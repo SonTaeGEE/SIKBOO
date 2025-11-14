@@ -6,6 +6,7 @@ import {
   updateIngredient,
 } from '@/api/ingredientApi';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 const LOCATION_TABS = [
   { key: null, label: '전체' },
@@ -119,7 +120,7 @@ export default function Ingredients() {
       }
     } catch (e) {
       console.error(e);
-      alert('삭제 중 오류가 발생했습니다.');
+      toast.error('삭제 중 오류가 발생했습니다.');
     }
   };
 
@@ -130,7 +131,7 @@ export default function Ingredients() {
   const submitAdd = async (e) => {
     e.preventDefault();
     if (!form.ingredientName?.trim()) {
-      alert('재료 이름을 입력하세요');
+      toast.error('재료 이름을 입력하세요');
       return;
     }
     const payload = {
@@ -146,7 +147,7 @@ export default function Ingredients() {
       fetchList(0);
     } catch (err) {
       console.error(err);
-      alert('재료 추가 중 오류가 발생했습니다.');
+      toast.error('재료 추가 중 오류가 발생했습니다.');
     }
   };
 
@@ -167,7 +168,7 @@ export default function Ingredients() {
     e.preventDefault();
     if (!selectedItem) return;
     if (!detailForm.ingredientName?.trim()) {
-      alert('재료 이름을 입력하세요');
+      toast.error('재료 이름을 입력하세요');
       return;
     }
     const payload = {
@@ -183,7 +184,7 @@ export default function Ingredients() {
       fetchList(currentPage);
     } catch (err) {
       console.error(err);
-      alert('수정 중 오류가 발생했습니다.');
+      toast.error('수정 중 오류가 발생했습니다.');
     }
   };
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, MessageCircle, Users, Clock, ShoppingBag, Edit2, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import { getTimeRemaining } from '@/lib/dateUtils';
 import {
@@ -42,7 +43,7 @@ const GroupBuyingDetail = () => {
 
   const handleJoin = () => {
     if (!currentUser) {
-      alert('로그인이 필요합니다.');
+      toast.error('로그인이 필요합니다.');
       return;
     }
 
@@ -50,10 +51,10 @@ const GroupBuyingDetail = () => {
       { id, memberId: currentUser.id },
       {
         onSuccess: () => {
-          alert('공동구매에 참여했습니다!');
+          toast.success('공동구매에 참여했습니다!');
         },
         onError: (error) => {
-          alert(error.response?.data?.message || '참여에 실패했습니다.');
+          toast.error(error.response?.data?.message || '참여에 실패했습니다.');
         },
       },
     );
@@ -67,10 +68,10 @@ const GroupBuyingDetail = () => {
         { id, memberId: currentUser.id },
         {
           onSuccess: () => {
-            alert('공동구매에서 나갔습니다.');
+            toast.success('공동구매에서 나갔습니다.');
           },
           onError: (error) => {
-            alert(error.response?.data?.message || '나가기에 실패했습니다.');
+            toast.error(error.response?.data?.message || '나가기에 실패했습니다.');
           },
         },
       );
@@ -80,11 +81,11 @@ const GroupBuyingDetail = () => {
   const handleDelete = () => {
     deleteMutation.mutate(id, {
       onSuccess: () => {
-        alert('공동구매가 삭제되었습니다.');
+        toast.success('공동구매가 삭제되었습니다.');
         navigate('/group-buying');
       },
       onError: (error) => {
-        alert(error.response?.data?.message || '삭제에 실패했습니다.');
+        toast.error(error.response?.data?.message || '삭제에 실패했습니다.');
       },
     });
     setShowDeleteDialog(false);

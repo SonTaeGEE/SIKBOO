@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 import LocationPickerModal from '@/components/GroupBuying/LocationPickerModal';
 import GroupBuyingForm from '@/components/GroupBuying/GroupBuyingForm';
@@ -28,7 +29,7 @@ const CreateGroupBuying = () => {
 
   // 성공/에러 처리
   const handleMutationSuccess = (data) => {
-    alert('공동구매가 생성되었습니다!');
+    toast.success('공동구매가 생성되었습니다!');
     // replace: true로 히스토리 스택에서 생성 페이지를 대체
     // 뒤로가기 시 목록 페이지로 이동
     navigate(`/group-buying/detail/${data.groupBuyingId}`, { replace: true });
@@ -36,7 +37,7 @@ const CreateGroupBuying = () => {
 
   const handleMutationError = (error) => {
     console.error('공동구매 생성 실패:', error);
-    alert(error.response?.data?.message || '공동구매 생성에 실패했습니다.');
+    toast.error(error.response?.data?.message || '공동구매 생성에 실패했습니다.');
   };
 
   const handleInputChange = (e) => {
@@ -70,11 +71,11 @@ const CreateGroupBuying = () => {
   const handleSubmit = () => {
     // 유효성 검사
     if (!formData.name.trim()) {
-      alert('식재료명을 입력해주세요.');
+      toast.error('식재료명을 입력해주세요.');
       return;
     }
     if (!selectedCategory) {
-      alert('카테고리를 선택해주세요.');
+      toast.error('카테고리를 선택해주세요.');
       return;
     }
     // 숫자 파싱 (쉼표 제거)
@@ -83,25 +84,25 @@ const CreateGroupBuying = () => {
       parseInt(String(formData.maxParticipants).replace(/\D/g, ''), 10) || 0;
 
     if (totalPriceNumber <= 0) {
-      alert('총 금액을 입력해주세요.');
+      toast.error('총 금액을 입력해주세요.');
       return;
     }
     if (maxParticipantsNumber <= 0) {
-      alert('최대 인원을 입력해주세요.');
+      toast.error('최대 인원을 입력해주세요.');
       return;
     }
     if (!selectedLocation) {
-      alert('수령 장소를 선택해주세요.');
+      toast.error('수령 장소를 선택해주세요.');
       return;
     }
     if (!formData.deadline) {
-      alert('마감 시간을 선택해주세요.');
+      toast.error('마감 시간을 선택해주세요.');
       return;
     }
 
     // API 요청 데이터 구성
     if (!currentUser || !currentUser.id) {
-      alert('로그인이 필요합니다.');
+      toast.error('로그인이 필요합니다.');
       return;
     }
 

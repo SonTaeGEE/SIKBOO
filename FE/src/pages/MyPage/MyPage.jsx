@@ -4,6 +4,7 @@ import React from 'react';
 import { getMe } from '@/api/userApi';
 import { getMyProfile, updateMyProfile } from '@/api/userApi'; // ⬅️ 추가
 import { logout } from '@/api/authApi';
+import toast from 'react-hot-toast';
 
 const MyPage = () => {
   const nav = useNavigate();
@@ -59,10 +60,10 @@ const MyPage = () => {
       });
       setProfile(updated);
       setEditing(false);
-      alert('저장되었습니다.');
+      toast.success('저장되었습니다.');
     } catch (error) {
       console.error('저장 실패:', error);
-      alert('저장에 실패했습니다.');
+      toast.error('저장에 실패했습니다.');
     }
   };
 
@@ -78,7 +79,7 @@ const MyPage = () => {
       allergies: profile.allergies,
     }).catch((error) => {
       console.error('삭제 실패:', error);
-      alert('삭제에 실패했습니다.');
+      toast.error('삭제에 실패했습니다.');
     });
   };
 
@@ -94,7 +95,7 @@ const MyPage = () => {
       allergies: items,
     }).catch((error) => {
       console.error('삭제 실패:', error);
-      alert('삭제에 실패했습니다.');
+      toast.error('삭제에 실패했습니다.');
     });
   };
 

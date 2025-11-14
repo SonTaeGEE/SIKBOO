@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Send, MessageSquare, Wifi, WifiOff, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import { useGroupBuying } from '@/hooks/useGroupBuying';
 import { useCurrentUser } from '@/hooks/useUser';
@@ -86,12 +87,12 @@ const GroupBuyingChat = () => {
   const handleSendMessage = () => {
     if (!chatMessage.trim()) return;
     if (!currentUser) {
-      alert('로그인이 필요합니다.');
+      toast.error('로그인이 필요합니다.');
       return;
     }
 
     if (!isConnected) {
-      alert('채팅 서버에 연결되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      toast.error('채팅 서버에 연결되지 않았습니다. 잠시 후 다시 시도해주세요.');
       return;
     }
 
@@ -99,7 +100,7 @@ const GroupBuyingChat = () => {
     if (success) {
       setChatMessage(''); // 입력창 초기화
     } else {
-      alert('메시지 전송에 실패했습니다.');
+      toast.error('메시지 전송에 실패했습니다.');
     }
   };
 

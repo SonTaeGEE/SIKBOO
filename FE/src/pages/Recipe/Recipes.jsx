@@ -7,6 +7,7 @@ import Empty from '@/components/Recipe/Empty';
 import ErrorBox from '@/components/Recipe/ErrorBox';
 import IngredientRow from '@/components/Recipe/IngredientRow';
 import recipeApi from '@/api/recipeApi';
+import toast from 'react-hot-toast';
 
 const Tab = { CREATE: 'CREATE', LIST: 'LIST' };
 const cx = (...xs) => xs.filter(Boolean).join(' ');
@@ -276,7 +277,7 @@ export default function Recipes() {
   const submitTitleChange = (room) => {
     const nextTitle = editingTitle.trim();
     if (!nextTitle) {
-      alert('제목을 입력해주세요.');
+      toast.error('제목을 입력해주세요.');
       return;
     }
     if (nextTitle === room.title) {
