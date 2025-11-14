@@ -259,10 +259,11 @@ public class IngredientService {
         List<Ingredient> batch = new ArrayList<>();
 
         for (IngredientItem item : items) {
-            String cleanName = TextSanitizer.sanitize(item.getName());       // ✅ 중앙 유틸
-            String cleanStorage = TextSanitizer.sanitize(item.getStorage());  // ✅ 중앙 유틸
+            String cleanName = TextSanitizer.sanitize(item.getName());
+            String cleanStorage = TextSanitizer.sanitize(item.getStorage());
 
-            log.info("저장할 데이터 - name: [{}], storage: [{}]", cleanName, cleanStorage);
+            log.info("AI 재료 처리 - name: [{}], storage: [{}], expiryDays: {}", 
+                cleanName, cleanStorage, item.getExpiryDays());
 
             if (cleanName.isEmpty()) {
                 log.warn("재료명이 비어있어 건너뜀");
@@ -270,9 +271,14 @@ public class IngredientService {
             }
 
             IngredientLocation location = parseLocation(cleanStorage);
+            
+            // ✅ AI가 분석한 expiryDays를 그대로 사용
             LocalDateTime dueDateTime = today.plusDays(item.getExpiryDays())
                 .atStartOfDay(KST)
                 .toLocalDateTime();
+
+            log.info("계산된 소비기한 - today: {}, +{}일 = {}", 
+                today, item.getExpiryDays(), dueDateTime);
 
             // 중복 검사
             LocalDateTime start = dueDateTime.toLocalDate().atStartOfDay(KST).toLocalDateTime();
@@ -290,10 +296,10 @@ public class IngredientService {
 
             Ingredient ingredient = Ingredient.builder()
                 .memberId(memberId)
-                .ingredientName(cleanName)  // ✅ 정제된 값 저장
+                .ingredientName(cleanName)
                 .location(location)
-                .due(dueDateTime)
-                .isDueEstimated(false)
+                .due(dueDateTime)  // ✅ AI가 계산한 날짜
+                .isDueEstimated(false)  // ✅ AI가 분석했으므로 false
                 .build();
 
             batch.add(ingredient);
@@ -302,18 +308,25 @@ public class IngredientService {
         if (!batch.isEmpty()) {
             repo.saveAll(batch);
             log.info("AI 재료 저장 완료: memberId={}, count={}", memberId, batch.size());
+            
+            // ✅ 저장된 데이터 확인 로그
+            batch.forEach(ing -> 
+                log.info("저장됨 - name: {}, location: {}, due: {}, estimated: {}", 
+                    ing.getIngredientName(), ing.getLocation(), 
+                    ing.getDue(), ing.isDueEstimated())
+            );
         }
     }
 
-    /** (미사용) 식재료명/보관장소 정제 */
-    private String cleanIngredientName(String name) {
-        if (name == null) return "";
-        return name.trim()
-            .replace("\"", "")
-            .replace("'", "")
-            .replaceAll("\\s+", " ")
-            .trim();
-    }
+//    /** (미사용) 식재료명/보관장소 정제 */
+//    private String cleanIngredientName(String name) {
+//        if (name == null) return "";
+//        return name.trim()
+//            .replace("\"", "")
+//            .replace("'", "")
+//            .replaceAll("\\s+", " ")
+//            .trim();
+//    }
 
     // ========== Private Helper Methods ==========
 
