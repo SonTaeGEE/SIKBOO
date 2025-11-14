@@ -3,39 +3,44 @@ package com.stg.sikboo.recipe.service;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stg.sikboo.ingredient.domain.Ingredient;
+import com.stg.sikboo.ingredient.domain.IngredientRepository;
+import com.stg.sikboo.member.domain.Member;
+import com.stg.sikboo.member.domain.MemberRepository;
 import com.stg.sikboo.recipe.domain.Recipe;
 import com.stg.sikboo.recipe.domain.repository.RecipeRepository;
 import com.stg.sikboo.recipe.dto.request.RecipeGenerateRequest;
 import com.stg.sikboo.recipe.dto.response.RecipeSuggestionResponse;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.annotation.PreDestroy;
-import java.sql.Array;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
+import java.util.Arrays;
 
 @Slf4j
 @Service
 public class RecipeService {
 
     private final RecipeRepository recipeRepository;
-    private final NamedParameterJdbcTemplate jdbc;
+    private final IngredientRepository ingredientRepository;
+    private final MemberRepository memberRepository;
     private final ChatClient chat; // Spring AI
     private final ObjectMapper mapper;
 
     public RecipeService(
             RecipeRepository recipeRepository,
-            NamedParameterJdbcTemplate jdbc,
+            IngredientRepository ingredientRepository,
+            MemberRepository memberRepository,
             ChatClient chatClient
     ) {
         this.recipeRepository = recipeRepository;
-        this.jdbc = jdbc;
+        this.ingredientRepository = ingredientRepository;
+        this.memberRepository = memberRepository;
         this.chat = chatClient;
         this.mapper = new ObjectMapper()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -47,7 +52,7 @@ public class RecipeService {
     private final Map<Long, Set<String>> generatedTitlesHave = new ConcurrentHashMap<>();
     private final Map<Long, Set<String>> generatedTitlesNeed = new ConcurrentHashMap<>();
 
-    // ★ 세션 단위 생성중 상태(탭 이동/재진입에도 유지)
+    // ★ 세션 단위 생성중 상태(탭 이동/재진입에도 유지, 서버 살아있는 동안)
     private final Set<Long> generatingSessions = ConcurrentHashMap.newKeySet();
 
     // ★ 백그라운드 생성용 스레드 풀(가볍게 2개)
@@ -63,78 +68,80 @@ public class RecipeService {
             "밥", "흰쌀밥", "쌀", "백미", "물", "정수"
     );
 
-    // ---------- 내 재료 목록 조회 ----------
+    // ---------- 내 재료 목록 조회 (JPA) ----------
     public List<Map<String, Object>> findMyIngredients(Long memberId) {
-        String sql = """
-                SELECT
-                    ingredient_id AS id,
-                    ingredient_name AS name
-                FROM ingredient
-                WHERE member_id = :memberId
-                ORDER BY ingredient_id DESC
-                """;
+        // IngredientRepository:
+        // List<Ingredient> findByMemberIdOrderByIdDesc(Long memberId);
 
-        return jdbc.query(sql, Map.of("memberId", memberId), (rs, i) -> {
-            Map<String, Object> m = new HashMap<>();
-            m.put("id", rs.getLong("id"));
-            m.put("name", rs.getString("name"));
-            return m;
-        });
+        List<Ingredient> ingredients =
+                ingredientRepository.findByMemberIdOrderByIdDesc(memberId);
+
+        return ingredients.stream()
+                .map(i -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id", i.getId());
+                    m.put("name", i.getIngredientName());
+                    return m;
+                })
+                .toList();
     }
 
-    // ---------- 선택 재료의 이름 조회 ----------
+    // ---------- 선택 재료의 이름 조회 (JPA) ----------
     private Set<String> getIngredientNames(Long memberId, List<Long> ids) {
         if (ids == null || ids.isEmpty()) return Set.of();
 
-        String sql = """
-                SELECT ingredient_name
-                FROM ingredient
-                WHERE member_id = :memberId
-                  AND ingredient_id IN (:ids)
-                """;
+        // IngredientRepository:
+        // List<Ingredient> findByMemberIdAndIdIn(Long memberId, List<Long> ids);
+        List<Ingredient> ingredients =
+                ingredientRepository.findByMemberIdAndIdIn(memberId, ids);
 
-        Map<String, Object> params = new HashMap<>();
-        params.put("memberId", memberId);
-        params.put("ids", ids);
-
-        List<String> names = jdbc.query(sql, params, (rs, i) -> rs.getString("ingredient_name"));
-        return names.stream().map(String::trim).collect(Collectors.toSet());
+        return ingredients.stream()
+                .map(Ingredient::getIngredientName)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .collect(Collectors.toSet());
     }
 
-    // ---------- 회원 질병/알레르기 조회 ----------
+    // ---------- 배열(String[]) → Set<String> 유틸 ----------
+    private Set<String> arrayToCleanSet(String[] arr) {
+        if (arr == null || arr.length == 0) return Set.of();
+
+        return Arrays.stream(arr)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .collect(Collectors.toSet());
+    }
+
+    // ---------- 회원 질병/알레르기 조회 (JPA) ----------
     private Health getMemberHealth(Long memberId) {
-        String sql = """
-                SELECT diseases, allergies
-                FROM member
-                WHERE member_id = :memberId
-                """;
         try {
-            return jdbc.queryForObject(sql, Map.of("memberId", memberId), (rs, i) -> {
-                Set<String> dis = new HashSet<>();
-                Set<String> al = new HashSet<>();
-                Array dArr = rs.getArray("diseases");
-                if (dArr != null) {
-                    Object[] a = (Object[]) dArr.getArray();
-                    for (Object v : a) if (v != null) dis.add(v.toString().trim());
-                }
-                Array aArr = rs.getArray("allergies");
-                if (aArr != null) {
-                    Object[] a = (Object[]) aArr.getArray();
-                    for (Object v : a) if (v != null) al.add(v.toString().trim());
-                }
-                return new Health(dis, al);
-            });
+            Optional<Member> optional = memberRepository.findById(memberId);
+            if (optional.isEmpty()) {
+                log.info("[HEALTH] memberId={} 건강정보 없음", memberId);
+                return new Health(Set.of(), Set.of());
+            }
+
+            Member member = optional.get();
+
+            // Member 엔티티: String[] diseases, String[] allergies 를 사용
+            Set<String> diseases = arrayToCleanSet(member.getDiseases());
+            Set<String> allergies = arrayToCleanSet(member.getAllergies());
+
+            return new Health(diseases, allergies);
         } catch (Exception e) {
-            log.info("[HEALTH] memberId={} 건강정보 조회 없음/실패: {}", memberId, e.toString());
+            log.info("[HEALTH] memberId={} 건강정보 조회 실패: {}", memberId, e.toString());
             return new Health(Set.of(), Set.of());
         }
     }
 
     // ---------- 레시피 생성(즉시 방 생성 → 비동기 AI) ----------
-    @Transactional
+    // 트랜잭션을 붙이지 않고, 각각의 repository 호출에서 자체 트랜잭션을 사용
     public Map<String, Object> generateRecipes(RecipeGenerateRequest req) {
         Long memberId = (req.memberId() != null) ? req.memberId() : 1L;
 
+        // 선택된 재료 & 건강정보
         Set<String> selectedNames = getIngredientNames(memberId, req.ingredientIds());
         Health health = getMemberHealth(memberId);
 
@@ -149,16 +156,19 @@ public class RecipeService {
         session.setDetail(emptyPayloadJson());
         recipeRepository.save(session);
 
-        // 세션 생성중 상태 세팅
-        generatingSessions.add(session.getId());
+        Long sessionId = session.getId();
+        generatingSessions.add(sessionId);
+
+        log.info("[GENERATE] sessionId={} memberId={} haveNow={}", sessionId, memberId, selectedNames);
 
         // 2) 백그라운드에서 AI 생성 → 세션 갱신
         aiExecutor.submit(() -> {
             try {
-                log.info("[AI-ASYNC] 시작 memberId={} sessionId={} haveNow={}", memberId, session.getId(), selectedNames);
+                log.info("[AI-ASYNC] 시작 memberId={} sessionId={}", memberId, sessionId);
                 AiResponse ai = callAi(memberId, selectedNames, Set.of(), Set.of(), health);
                 lastAiResponse.put(memberId, ai);
 
+                // 제목 결정
                 String haveTitle = ai.have.isEmpty() ? null : ai.have.get(0).title;
                 String needTitle = ai.need.isEmpty() ? null : ai.need.get(0).title;
                 String sessionTitle;
@@ -169,7 +179,8 @@ public class RecipeService {
                 } else if (needTitle != null) {
                     sessionTitle = needTitle;
                 } else {
-                    sessionTitle = "AI 레시피 제안";
+                    // 레시피가 하나도 없으면 실패 안내
+                    sessionTitle = "레시피 생성에 실패했습니다";
                 }
 
                 String payload;
@@ -180,21 +191,30 @@ public class RecipeService {
                     payload = emptyPayloadJson();
                 }
 
-                // DB 업데이트
-                Recipe s = recipeRepository.findById(session.getId()).orElseThrow();
+                // DB 업데이트 (JPA - 각 호출은 자체 트랜잭션)
+                Recipe s = recipeRepository.findById(sessionId).orElseThrow();
                 s.setName(sessionTitle);
                 s.setDetail(payload);
                 recipeRepository.save(s);
                 log.info("[AI-ASYNC] 완료 sessionId={} title={}", s.getId(), sessionTitle);
             } catch (Exception ex) {
-                log.warn("[AI-ASYNC] 실패 sessionId={} : {}", session.getId(), ex.toString());
+                log.warn("[AI-ASYNC] 실패 sessionId={} : {}", sessionId, ex.toString());
+                // 실패 시에도 세션 이름만 변경해서 사용자에게 알려줌
+                try {
+                    Recipe s = recipeRepository.findById(sessionId).orElseThrow();
+                    s.setName("레시피 생성에 실패했습니다");
+                    s.setDetail(emptyPayloadJson());
+                    recipeRepository.save(s);
+                } catch (Exception e2) {
+                    log.warn("[AI-ASYNC] 실패 세션 업데이트도 실패 sessionId={} : {}", sessionId, e2.toString());
+                }
             } finally {
-                generatingSessions.remove(session.getId());
+                generatingSessions.remove(sessionId);
             }
         });
 
         Map<String, Object> ret = new HashMap<>();
-        ret.put("id", session.getId());
+        ret.put("id", sessionId);
         ret.put("title", session.getName()); // "레시피 생성중…"
         return ret;
     }
@@ -203,7 +223,7 @@ public class RecipeService {
         return "{\"notice\":\"\",\"have\":[],\"need\":[]}";
     }
 
-    // ---------- 목록 조회 ----------
+    // ---------- 목록 조회 (현재는 AI 메모리 기준 API — 필요 시 사용) ----------
     public List<RecipeSuggestionResponse> listRecipes(Long memberId, String filter, String q) {
         AiResponse ai = lastAiResponse.get(memberId);
         if (ai == null) return List.of();
@@ -241,8 +261,10 @@ public class RecipeService {
 
             String json = extractJson(raw);
             if (json == null || json.isBlank()) {
-                log.warn("[AI] JSON 추출 실패.");
-                return new AiResponse();
+                log.warn("[AI] JSON 추출 실패. raw={}", raw);
+                AiResponse fail = new AiResponse();
+                fail.notice = "AI 응답을 해석하지 못해 레시피를 생성하지 못했습니다.";
+                return fail.sanitize();
             }
 
             AiResponse res = mapper.readValue(json, AiResponse.class).sanitize();
@@ -282,7 +304,9 @@ public class RecipeService {
             return res;
         } catch (Exception e) {
             log.warn("[AI] call/parse 실패: {}", e.toString());
-            return new AiResponse();
+            AiResponse fail = new AiResponse();
+            fail.notice = "AI 호출 중 오류가 발생해 레시피를 생성하지 못했습니다.";
+            return fail.sanitize();
         }
     }
 
@@ -464,10 +488,10 @@ public class RecipeService {
     }
 
     // =========================
-    // 세션(방) 목록/상세
+    // 세션(방) 목록/상세 (JPA)
     // =========================
     public List<Map<String, Object>> listSessions(Long memberId) {
-        var list = recipeRepository.findByMemberId(memberId);
+        List<Recipe> list = recipeRepository.findByMemberId(memberId);
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
         return list.stream()
@@ -477,6 +501,8 @@ public class RecipeService {
                     m.put("id", r.getId());
                     m.put("title", r.getName());
                     m.put("createdAt", r.getCreatedAt() == null ? null : fmt.format(r.getCreatedAt()));
+                    // 프론트에서 카드에 "생성중" 상태를 표시할 수 있도록
+                    m.put("generating", generatingSessions.contains(r.getId()));
                     return m;
                 })
                 .toList();
@@ -495,7 +521,8 @@ public class RecipeService {
             ai = mapper.readValue(e.getDetail(), AiResponse.class).sanitize();
         } catch (Exception ex) {
             log.warn("[AI] DB detail 파싱 실패(id={}): {}", id, ex.toString());
-            ai = new AiResponse();
+            ai = new AiResponse().sanitize();
+            ai.notice = "저장된 레시피 데이터를 읽어오지 못했습니다.";
         }
 
         Map<String, Object> ret = new HashMap<>();
@@ -509,7 +536,7 @@ public class RecipeService {
         return ret;
     }
 
-    // ====== DTOs ======
+    // ====== 내부 DTO ======
     record Health(Set<String> diseases, Set<String> allergies) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)

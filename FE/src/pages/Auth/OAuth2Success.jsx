@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getMe } from '@/api/authApi'; // ⬅️ authApi에서 import
-import axiosInstance from '@/api/axiosInstance';
 
 const OAuth2Success = () => {
   const nav = useNavigate();
@@ -42,9 +41,6 @@ const OAuth2Success = () => {
         // ★ 3) 온보딩 상태 체크 (추가된 부분)
         setMsg('온보딩 상태 확인 중...');
         try {
-          // 아무 API나 호출해서 428 체크 (가장 가벼운 API 선택)
-          await axiosInstance.get('/api/ingredients?size=1&page=0');
-
           // 200 응답 → 온보딩 완료 → 재료 페이지로
           nav('/ingredients', { replace: true });
         } catch (error) {

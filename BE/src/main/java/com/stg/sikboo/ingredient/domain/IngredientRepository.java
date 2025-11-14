@@ -60,4 +60,9 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
 
     // 단건 조회(소유자 일치)
     Optional<Ingredient> findByIdAndMemberId(Long id, Long memberId);
+    
+    List<Ingredient> findByMemberIdOrderByIdDesc(Long memberId);
+
+    // 특정 id 리스트에 해당하는 재료들(소유자 필터 포함)
+    List<Ingredient> findByMemberIdAndIdIn(Long memberId, List<Long> ids);
 }

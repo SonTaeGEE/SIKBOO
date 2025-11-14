@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { submitOnboarding, skipOnboarding } from '@/api/authApi';
-import { analyzeIngredientText } from '@/api/ingredientApi';
+import { analyzeIngredientText, addIngredientsFromAi } from '@/api/ingredientApi';
 import sikbooLogo from '@/assets/sikboo.png';
 
 const Onboarding = () => {
@@ -52,6 +52,15 @@ const Onboarding = () => {
     setLoading(true);
     try {
       const result = await analyzeIngredientText(aiText);
+
+      // ✅ AI 분석 결과 확인
+      console.log('AI 분석 결과:', result);
+      result.items?.forEach((item, idx) => {
+        console.log(
+          `항목 ${idx + 1} - name: "${item.name}", storage: "${item.storage}", expiryDays: ${item.expiryDays}`,
+        );
+      });
+
       setAiResult(result);
     } catch (error) {
       console.error('AI 분석 실패:', error);
@@ -74,14 +83,74 @@ const Onboarding = () => {
     setAiResult({ ...aiResult, items: newItems });
   };
 
+  // ✅ 날짜 계산 헬퍼 함수
+  const calculateDueDate = (expiryDays) => {
+    const today = new Date();
+    const dueDate = new Date(today);
+    dueDate.setDate(today.getDate() + expiryDays);
+    return dueDate.toISOString().split('T')[0]; // "YYYY-MM-DD"
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      let ingredientsData = {};
+      // 공통 프로필
+      const profile = {
+        diseases: diseases
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        allergies: allergies
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      };
 
-      if (mode === 'manual') {
-        // 수동 입력 모드
-        ingredientsData = {
+      if (mode === 'ai') {
+        // --- AI 모드 ---
+        if (!aiResult || !aiResult.items || aiResult.items.length === 0) {
+          alert('먼저 AI 분석을 진행해주세요.');
+          return;
+        }
+
+        // ✅ expiryDays가 0 이상의 숫자인지 검증 (0도 유효)
+        const items = aiResult.items.map((it) => {
+          const expiry = Number(it.expiryDays);
+
+          // 기본값 결정 (expiryDays가 없거나 유효하지 않을 때만)
+          let finalExpiryDays;
+          if (Number.isFinite(expiry) && expiry >= 0) {
+            // ✅ 0 이상의 유효한 숫자면 그대로 사용
+            finalExpiryDays = expiry;
+          } else {
+            // 기본값 적용
+            finalExpiryDays = it.storage === '냉동실' ? 90 : it.storage === '실온' ? 3 : 7;
+          }
+
+          return {
+            name: String(it.name ?? '').trim(),
+            storage:
+              it.storage === '냉장고' || it.storage === '냉동실' || it.storage === '실온'
+                ? it.storage
+                : '냉장고',
+            expiryDays: finalExpiryDays,
+          };
+        });
+
+        console.log('AI 모드 - 정제된 items:', items);
+
+        // 1) AI 결과를 먼저 저장 (여기서 expiryDays가 그대로 반영되어 due 계산됨)
+        await addIngredientsFromAi(items);
+
+        // 2) 온보딩 완료만 표시 (ingredients는 비워서 재저장 방지)
+        await submitOnboarding({
+          profile,
+          ingredients: null,
+          skip: false,
+        });
+      } else {
+        // --- 수동 모드: 기존대로 온보딩만 호출 (서버가 +7/+90/+3 추정) ---
+        const ingredientsData = {
           냉장고: fridge
             .split('\n')
             .map((s) => s.trim())
@@ -95,47 +164,22 @@ const Onboarding = () => {
             .map((s) => s.trim())
             .filter(Boolean),
         };
-      } else {
-        // AI 입력 모드
-        if (!aiResult || !aiResult.items) {
-          alert('먼저 AI 분석을 진행해주세요.');
-          setLoading(false);
-          return;
-        }
 
-        // AI 결과를 보관장소별로 그룹화
-        ingredientsData = {
-          냉장고: [],
-          냉동실: [],
-          실온: [],
-        };
-
-        aiResult.items.forEach((item) => {
-          if (ingredientsData[item.storage]) {
-            ingredientsData[item.storage].push(item.name);
-          }
+        await submitOnboarding({
+          profile,
+          ingredients: ingredientsData,
+          skip: false,
         });
       }
 
-      const payload = {
-        profile: {
-          diseases: diseases
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean),
-          allergies: allergies
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean),
-        },
-        ingredients: ingredientsData,
-        skip: false,
-      };
-
-      await submitOnboarding(payload);
       navigate('/ingredients', { replace: true });
     } catch (error) {
       console.error('제출 실패:', error);
+      if (error?.response?.status === 401) {
+        alert('인증이 만료되었습니다. 다시 로그인해주세요.');
+        navigate('/login', { replace: true });
+        return;
+      }
       alert('제출 중 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setLoading(false);
@@ -314,7 +358,13 @@ const Onboarding = () => {
                   직접
                 </span>
                 <button
-                  onClick={() => setMode(mode === 'manual' ? 'ai' : 'manual')}
+                  onClick={() => {
+                    setMode(mode === 'manual' ? 'ai' : 'manual');
+                    if (mode === 'ai') {
+                      setAiResult(null);
+                      setAiText('');
+                    }
+                  }}
                   className={`relative h-7 w-12 rounded-full transition-colors ${
                     mode === 'ai' ? 'bg-[#5f0080]' : 'bg-gray-300'
                   }`}
@@ -455,83 +505,120 @@ const Onboarding = () => {
                     </div>
 
                     <div className="space-y-2">
-                      {aiResult.items.map((item, index) => (
-                        <div
-                          key={index}
-                          className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white p-3"
-                        >
-                          {/* 아이콘 */}
-                          <div className="flex-shrink-0">
-                            {item.storage === '냉장고' && (
-                              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-lg">
-                                ❄️
-                              </span>
-                            )}
-                            {item.storage === '냉동실' && (
-                              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-lg">
-                                🧊
-                              </span>
-                            )}
-                            {item.storage === '실온' && (
-                              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-lg">
-                                🌡️
-                              </span>
-                            )}
-                          </div>
+                      {aiResult.items.map((item, index) => {
+                        // ✅ 각 아이템마다 실시간으로 날짜 계산
+                        const expiryDays = Number(item.expiryDays);
+                        const validExpiryDays =
+                          Number.isFinite(expiryDays) && expiryDays >= 0
+                            ? expiryDays
+                            : item.storage === '냉동실'
+                              ? 90
+                              : item.storage === '실온'
+                                ? 3
+                                : 7;
 
-                          {/* 내용 */}
-                          <div className="flex-1">
-                            <div className="mb-2 flex items-center gap-2">
-                              <input
-                                type="text"
-                                value={item.name}
-                                onChange={(e) => handleEditAiItem(index, 'name', e.target.value)}
-                                className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm font-semibold focus:border-[#5f0080] focus:outline-none"
-                              />
-                              <button
-                                onClick={() => handleRemoveAiItem(index)}
-                                className="flex h-6 w-6 items-center justify-center rounded-lg text-gray-400 hover:bg-red-100 hover:text-red-600"
-                              >
-                                ✕
-                              </button>
+                        const calculatedDate = calculateDueDate(validExpiryDays);
+
+                        return (
+                          <div
+                            key={index}
+                            className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white p-3"
+                          >
+                            {/* 아이콘 */}
+                            <div className="flex-shrink-0">
+                              {item.storage === '냉장고' && (
+                                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-lg">
+                                  ❄️
+                                </span>
+                              )}
+                              {item.storage === '냉동실' && (
+                                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-lg">
+                                  🧊
+                                </span>
+                              )}
+                              {item.storage === '실온' && (
+                                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-lg">
+                                  🌡️
+                                </span>
+                              )}
                             </div>
 
-                            <div className="flex items-center gap-3 text-xs">
-                              <div className="flex items-center gap-1">
-                                <span className="text-gray-500">보관:</span>
-                                <select
-                                  value={item.storage}
-                                  onChange={(e) =>
-                                    handleEditAiItem(index, 'storage', e.target.value)
-                                  }
-                                  className="rounded border border-gray-300 px-2 py-0.5 text-xs focus:border-[#5f0080] focus:outline-none"
-                                >
-                                  <option value="냉장고">냉장고</option>
-                                  <option value="냉동실">냉동실</option>
-                                  <option value="실온">실온</option>
-                                </select>
-                              </div>
-
-                              <div className="flex items-center gap-1">
-                                <span className="text-gray-500">기한:</span>
+                            {/* 내용 */}
+                            <div className="flex-1">
+                              <div className="mb-2 flex items-center gap-2">
                                 <input
-                                  type="number"
-                                  value={item.expiryDays}
-                                  onChange={(e) =>
-                                    handleEditAiItem(
-                                      index,
-                                      'expiryDays',
-                                      parseInt(e.target.value) || 0,
-                                    )
-                                  }
-                                  className="w-12 rounded border border-gray-300 px-1 py-0.5 text-center text-xs focus:border-[#5f0080] focus:outline-none"
+                                  type="text"
+                                  value={item.name}
+                                  onChange={(e) => handleEditAiItem(index, 'name', e.target.value)}
+                                  className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm font-semibold focus:border-[#5f0080] focus:outline-none"
                                 />
-                                <span className="text-gray-500">일</span>
+                                <button
+                                  onClick={() => handleRemoveAiItem(index)}
+                                  className="flex h-6 w-6 items-center justify-center rounded-lg text-gray-400 hover:bg-red-100 hover:text-red-600"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                {/* 보관 위치 */}
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-500">보관:</span>
+                                  <select
+                                    value={item.storage}
+                                    onChange={(e) =>
+                                      handleEditAiItem(index, 'storage', e.target.value)
+                                    }
+                                    className="rounded border border-gray-300 px-2 py-0.5 text-xs focus:border-[#5f0080] focus:outline-none"
+                                  >
+                                    <option value="냉장고">냉장고</option>
+                                    <option value="냉동실">냉동실</option>
+                                    <option value="실온">실온</option>
+                                  </select>
+                                </div>
+
+                                {/* 소비기한 입력 */}
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-500">기한:</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={item.expiryDays ?? validExpiryDays}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value);
+                                      handleEditAiItem(
+                                        index,
+                                        'expiryDays',
+                                        Number.isNaN(val) ? 0 : val,
+                                      );
+                                    }}
+                                    className="w-14 rounded border border-gray-300 px-1 py-0.5 text-center text-xs focus:border-[#5f0080] focus:outline-none"
+                                  />
+                                  <span className="text-gray-500">일 후</span>
+                                </div>
+
+                                {/* ✅ 계산된 날짜 표시 (실시간 반영) */}
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-400">→</span>
+                                  <span className="font-medium text-[#5f0080]">
+                                    {calculatedDate}
+                                  </span>
+                                  {validExpiryDays === 0 && (
+                                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-600">
+                                      오늘까지
+                                    </span>
+                                  )}
+                                  {validExpiryDays === 1 && (
+                                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-600">
+                                      내일까지
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
