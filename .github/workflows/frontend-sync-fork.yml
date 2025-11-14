@@ -1,0 +1,25 @@
+name: Sync Forked Repositories
+
+on:
+  push:
+    branches:
+      - main # main 브랜치에 push가 발생할 때 실행
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Git
+        run: |
+          git config --global user.name "ncb6206"
+          git config --global user.email "ncb6206@gmail.com"
+
+      - name: Add Forked Repo and Push Changes
+        run: |
+          git remote add forked https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/ncb6206/front.git
+          git push forked main  # push로 최신 상태 유지

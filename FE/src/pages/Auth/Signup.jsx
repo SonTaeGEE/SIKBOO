@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ChevronLeft } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -79,11 +80,11 @@ const Signup = () => {
       console.log('회원가입 데이터:', formData);
 
       // 임시: 회원가입 성공 시 로그인 페이지로 이동
-      alert('회원가입이 완료되었습니다!');
+      toast.success('회원가입이 완료되었습니다!');
       navigate('/login');
     } catch (error) {
       console.error('회원가입 실패:', error);
-      alert('회원가입에 실패했습니다. 다시 시도해주세요.');
+      toast.error('회원가입에 실패했습니다. 다시 시도해주세요.');
     }
   };
 

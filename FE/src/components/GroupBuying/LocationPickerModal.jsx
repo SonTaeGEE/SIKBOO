@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { MapPin, Search, Locate, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import { useKakaoMap } from '@/hooks/useKakaoMap';
 import { calculateDistance } from '@/utils/calculateDistance';
@@ -125,7 +126,7 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
           const distance = calculateDistance(location.lat, location.lng, clickedLat, clickedLng);
 
           if (distance > RADIUS_KM) {
-            alert(`현재 위치에서 ${RADIUS_KM}km 이내의 장소만 선택 가능합니다.`);
+            toast.error(`현재 위치에서 ${RADIUS_KM}km 이내의 장소만 선택 가능합니다.`);
             return;
           }
 
@@ -137,7 +138,7 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
         });
       } catch (error) {
         console.error('지도 초기화 실패:', error);
-        alert('지도를 불러오는데 실패했습니다.');
+        toast.error('지도를 불러오는데 실패했습니다.');
       }
     };
 
@@ -288,7 +289,7 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
   // 위치 확인 버튼
   const handleConfirm = () => {
     if (!selectedPosition) {
-      alert('수령 장소를 선택해주세요');
+      toast.error('수령 장소를 선택해주세요');
       return;
     }
 

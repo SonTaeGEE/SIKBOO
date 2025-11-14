@@ -68,15 +68,20 @@ const GroupBuying = () => {
     isFetchingNextPage: isFetchingNextRecruiting,
     hasNextPage: hasNextRecruiting,
     fetchNextPage: fetchNextRecruiting,
-  } = useInfiniteGroupBuyings({
-    search: searchQuery || undefined,
-    category: category === 'all' ? undefined : category,
-    status: 'RECRUITING',
-    lat: currentPosition?.lat,
-    lng: currentPosition?.lng,
-    distance: parseFloat(distanceFilter),
-    pageSize: 20,
-  });
+  } = useInfiniteGroupBuyings(
+    {
+      search: searchQuery || undefined,
+      category: category === 'all' ? undefined : category,
+      status: 'RECRUITING',
+      lat: currentPosition?.lat,
+      lng: currentPosition?.lng,
+      distance: parseFloat(distanceFilter),
+      pageSize: 20,
+    },
+    {
+      enabled: activeTab === 'recruiting', // recruiting 탭일 때만 데이터 가져오기
+    },
+  );
 
   // 내가 참여한 공동구매 무한 스크롤 조회 (joined 탭일 때만)
   const {
@@ -85,12 +90,17 @@ const GroupBuying = () => {
     isFetchingNextPage: isFetchingNextMy,
     hasNextPage: hasNextMy,
     fetchNextPage: fetchNextMy,
-  } = useInfiniteMyParticipatingGroupBuyings({
-    memberId: currentUser?.id,
-    search: searchQuery || undefined,
-    category: category === 'all' ? undefined : category,
-    pageSize: 20,
-  });
+  } = useInfiniteMyParticipatingGroupBuyings(
+    {
+      memberId: currentUser?.id,
+      search: searchQuery || undefined,
+      category: category === 'all' ? undefined : category,
+      pageSize: 20,
+    },
+    {
+      enabled: activeTab === 'joined' && !!currentUser?.id, // joined 탭이고 사용자 ID가 있을 때만 데이터 가져오기
+    },
+  );
 
   // 현재 위치 가져오기
   useEffect(() => {
