@@ -33,6 +33,10 @@ export default function Recipes() {
 
   const [selected, setSelected] = useState(() => new Set());
 
+  // ★ 검색어 상태 (생성 탭: 재료, 목록 탭: 세션 제목)
+  const [ingredientKeyword, setIngredientKeyword] = useState('');
+  const [sessionKeyword, setSessionKeyword] = useState('');
+
   // ★ sessionStorage 에 남아 있던 대기중 세션 복원
   const [waitingSessionId, setWaitingSessionId] = useState(() => {
     const storedId = sessionStorage.getItem('recipes.waitingSessionId');
@@ -67,6 +71,14 @@ export default function Recipes() {
     queryFn: recipeApi.fetchMyIngredients,
     enabled: tab === Tab.CREATE,
   });
+
+  // 재료 검색 필터링
+  const filteredIngredients = useMemo(() => {
+    if (!my.data) return [];
+    const q = ingredientKeyword.trim().toLowerCase();
+    if (!q) return my.data;
+    return my.data.filter((it) => (it.name || '').toLowerCase().includes(q));
+  }, [my.data, ingredientKeyword]);
 
   const toggle = (id) =>
     setSelected((prev) => {
@@ -183,6 +195,14 @@ export default function Recipes() {
     enabled: tab === Tab.LIST,
   });
 
+  // 세션 검색 필터링
+  const filteredSessions = useMemo(() => {
+    if (!sessions.data) return [];
+    const q = sessionKeyword.trim().toLowerCase();
+    if (!q) return sessions.data;
+    return sessions.data.filter((room) => (room.title || '').toLowerCase().includes(q));
+  }, [sessions.data, sessionKeyword]);
+
   const selCount = selected.size;
 
   return (
@@ -224,22 +244,41 @@ export default function Recipes() {
           <>
             {my.isLoading && <div className="py-10 text-center text-slate-500">불러오는 중…</div>}
             {my.isError && <ErrorBox error={my.error} />}
-            {!my.isLoading &&
-              !my.isError &&
-              (my.data.length === 0 ? (
-                <Empty text="등록된 내 재료가 없어요." />
-              ) : (
-                <ul className="divide-y">
-                  {my.data.map((it) => (
-                    <IngredientRow
-                      key={it.id}
-                      it={it}
-                      selected={selected.has(it.id)}
-                      onToggle={toggle}
-                    />
-                  ))}
-                </ul>
-              ))}
+
+            {!my.isLoading && !my.isError && my.data && my.data.length === 0 && (
+              <Empty text="등록된 내 재료가 없어요." />
+            )}
+
+            {!my.isLoading && !my.isError && my.data && my.data.length > 0 && (
+              <>
+                {/* 재료 검색 인풋 */}
+                <div className="mb-3">
+                  <input
+                    type="text"
+                    value={ingredientKeyword}
+                    onChange={(e) => setIngredientKeyword(e.target.value)}
+                    placeholder="재료 이름 검색 (예: 바나나)"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+                  />
+                </div>
+
+                {/* 재료 리스트 (검색 반영) */}
+                {filteredIngredients.length === 0 ? (
+                  <Empty text="검색 결과에 해당하는 재료가 없어요." />
+                ) : (
+                  <ul className="divide-y">
+                    {filteredIngredients.map((it) => (
+                      <IngredientRow
+                        key={it.id}
+                        it={it}
+                        selected={selected.has(it.id)}
+                        onToggle={toggle}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
           </>
         ) : (
           <>
@@ -248,70 +287,89 @@ export default function Recipes() {
               <Skeleton />
             ) : sessions.isError ? (
               <ErrorBox error={sessions.error} />
-            ) : sessions.data.length === 0 ? (
+            ) : !sessions.data || sessions.data.length === 0 ? (
               <Empty text="아직 생성된 방이 없어요. 생성 탭에서 만들어보세요!" />
             ) : (
-              <div className="mb-10 space-y-2">
-                {sessions.data.map((room) => {
-                  const isCurrentGeneratingRoom =
-                    waitingSessionId != null && room.id === waitingSessionId && generatingVisible;
+              <>
+                {/* 세션 검색 인풋 */}
+                <div className="mb-3">
+                  <input
+                    type="text"
+                    value={sessionKeyword}
+                    onChange={(e) => setSessionKeyword(e.target.value)}
+                    placeholder="레시피 방 제목 검색"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+                  />
+                </div>
 
-                  const createdAtText = room.createdAt
-                    ? new Date(room.createdAt).toLocaleString()
-                    : '';
+                {filteredSessions.length === 0 ? (
+                  <Empty text="검색 결과에 해당하는 레시피 방이 없어요." />
+                ) : (
+                  <div className="mb-10 space-y-2">
+                    {filteredSessions.map((room) => {
+                      const isCurrentGeneratingRoom =
+                        waitingSessionId != null &&
+                        room.id === waitingSessionId &&
+                        generatingVisible;
 
-                  return (
-                    <button
-                      key={room.id}
-                      type="button"
-                      disabled={isCurrentGeneratingRoom}
-                      onClick={() => {
-                        if (isCurrentGeneratingRoom) return; // 생성중이면 진입 막기
-                        sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
-                        navigate(`/recipes/sessions/${room.id}`);
-                      }}
-                      className={cx(
-                        'w-full rounded-xl border px-4 py-3 text-left transition',
-                        isCurrentGeneratingRoom
-                          ? 'cursor-not-allowed bg-gradient-to-r from-emerald-100 via-emerald-50 to-emerald-100 opacity-95'
-                          : 'bg-white hover:bg-indigo-50',
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {/* 생성중일 때는 항상 이 텍스트로 & 깜빡이게 */}
-                          <span
-                            className={cx(
-                              'font-semibold',
-                              isCurrentGeneratingRoom && 'animate-pulse text-black',
-                            )}
-                          >
-                            {isCurrentGeneratingRoom ? '레시피 생성중…' : room.title}
-                          </span>
-                        </div>
-                        <div className="text-xs text-slate-500">{createdAtText}</div>
-                      </div>
+                      const createdAtText = room.createdAt
+                        ? new Date(room.createdAt).toLocaleString()
+                        : '';
 
-                      {/* 이 방이 현재 생성중일 때만 진행률 바 노출 */}
-                      {isCurrentGeneratingRoom && (
-                        <div className="mt-2">
-                          <div className="mb-1 flex items-center justify-between text-[11px] text-slate-600">
-                            <span>
-                              진행률 {progressStep}/10 ({progressPercent}%)
-                            </span>
+                      return (
+                        <button
+                          key={room.id}
+                          type="button"
+                          disabled={isCurrentGeneratingRoom}
+                          onClick={() => {
+                            if (isCurrentGeneratingRoom) return; // 생성중이면 진입 막기
+                            sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
+                            navigate(`/recipes/sessions/${room.id}`);
+                          }}
+                          className={cx(
+                            'w-full rounded-xl border px-4 py-3 text-left transition',
+                            isCurrentGeneratingRoom
+                              ? 'cursor-not-allowed bg-gradient-to-r from-emerald-100 via-emerald-50 to-emerald-100 opacity-95'
+                              : 'bg-white hover:bg-indigo-50',
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {/* 생성중일 때는 항상 이 텍스트로 & 깜빡이게 */}
+                              <span
+                                className={cx(
+                                  'font-semibold',
+                                  isCurrentGeneratingRoom && 'animate-pulse text-black',
+                                )}
+                              >
+                                {isCurrentGeneratingRoom ? '레시피 생성중…' : room.title}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-500">{createdAtText}</div>
                           </div>
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
-                            <div
-                              className="h-full rounded-full bg-emerald-400 transition-all duration-500 ease-out"
-                              style={{ width: `${progressPercent}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+
+                          {/* 이 방이 현재 생성중일 때만 진행률 바 노출 */}
+                          {isCurrentGeneratingRoom && (
+                            <div className="mt-2">
+                              <div className="mb-1 flex items-center justify-between text-[11px] text-slate-600">
+                                <span>
+                                  진행률 {progressStep}/10 ({progressPercent}%)
+                                </span>
+                              </div>
+                              <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
+                                <div
+                                  className="h-full rounded-full bg-emerald-400 transition-all duration-500 ease-out"
+                                  style={{ width: `${progressPercent}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
