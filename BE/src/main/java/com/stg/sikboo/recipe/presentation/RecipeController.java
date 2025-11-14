@@ -20,11 +20,6 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(
-        origins = { "http://localhost:5173", "http://127.0.0.1:5173" },
-        allowCredentials = "true",
-        maxAge = 3600
-)
 public class RecipeController {
 
     private final RecipeService recipeService;
@@ -116,5 +111,44 @@ public class RecipeController {
         Long memberId = currentMemberId(jwt);
         log.info("[GET] /recipes/sessions/{} memberId={}", sessionId, memberId);
         return ResponseEntity.ok(recipeService.getSessionDetail(memberId, sessionId));
+    }
+
+    /** [방 제목 수정] */
+    @PatchMapping("/recipes/sessions/{id}")
+    public ResponseEntity<Map<String, Object>> updateSessionTitle(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable("id") Long sessionId,
+            @RequestBody Map<String, String> body
+    ) {
+        Long memberId = currentMemberId(jwt);
+        String title = body.getOrDefault("title", "").trim();
+        log.info("[PATCH] /recipes/sessions/{} memberId={} title={}", sessionId, memberId, title);
+        Map<String, Object> updated = recipeService.updateSessionTitle(memberId, sessionId, title);
+        return ResponseEntity.ok(updated);
+    }
+
+    /** [방 삭제] */
+    @DeleteMapping("/recipes/sessions/{id}")
+    public ResponseEntity<Void> deleteSession(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable("id") Long sessionId
+    ) {
+        Long memberId = currentMemberId(jwt);
+        log.info("[DELETE] /recipes/sessions/{} memberId={}", sessionId, memberId);
+        recipeService.deleteSession(memberId, sessionId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** [방 순서 재정렬] */
+    @PatchMapping("/recipes/sessions/reorder")
+    public ResponseEntity<Void> reorderSessions(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody Map<String, List<Long>> body
+    ) {
+        Long memberId = currentMemberId(jwt);
+        List<Long> orderedIds = body.get("orderedIds");
+        log.info("[PATCH] /recipes/sessions/reorder memberId={} orderedIds={}", memberId, orderedIds);
+        recipeService.reorderSessions(memberId, orderedIds);
+        return ResponseEntity.ok().build();
     }
 }
