@@ -4,6 +4,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +16,7 @@ import com.stg.sikboo.groupbuying.domain.GroupBuying.Status;
 import com.stg.sikboo.groupbuying.domain.repository.GroupBuyingRepository;
 import com.stg.sikboo.groupbuying.dto.request.GroupBuyingCreateRequest;
 import com.stg.sikboo.groupbuying.dto.request.GroupBuyingUpdateRequest;
+import com.stg.sikboo.groupbuying.dto.response.GroupBuyingPageResponse;
 import com.stg.sikboo.groupbuying.dto.response.GroupBuyingResponse;
 import com.stg.sikboo.member.domain.Member;
 import com.stg.sikboo.member.domain.MemberRepository;
@@ -51,7 +55,7 @@ public class GroupBuyingService {
                 .pickupLatitude(request.getPickupLatitude())
                 .pickupLongitude(request.getPickupLongitude())
                 .deadline(request.getDeadline())
-                .status(Status.모집중)
+                .status(Status.RECRUITING)
                 .build();
         
         GroupBuying saved = groupBuyingRepository.save(groupBuying);
@@ -91,7 +95,7 @@ public class GroupBuyingService {
      */
     public List<GroupBuyingResponse> getActiveGroupBuyings() {
         LocalDateTime now = LocalDateTime.now();
-        return groupBuyingRepository.findByStatusAndDeadlineAfter(Status.모집중, now).stream()
+        return groupBuyingRepository.findByStatusAndDeadlineAfter(Status.RECRUITING, now).stream()
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .map(GroupBuyingResponse::from)
                 .collect(Collectors.toList());
@@ -125,8 +129,18 @@ public class GroupBuyingService {
         GroupBuying groupBuying = groupBuyingRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 공동구매입니다."));
         
-        // 수정 로직 (Setter 대신 빌더 패턴으로 재생성하거나, Entity에 수정 메서드 추가 필요)
-        // 현재는 간단히 예시로 작성
+        // Entity의 update 메서드 호출 (더티 체킹으로 자동 업데이트)
+        groupBuying.update(
+                request.getTitle(),
+                request.getCategory(),
+                request.getTotalPrice(),
+                request.getMaxPeople(),
+                request.getInfo(),
+                request.getPickupLocation(),
+                request.getPickupLatitude(),
+                request.getPickupLongitude(),
+                request.getDeadline()
+        );
         
         return GroupBuyingResponse.from(groupBuying);
     }
@@ -139,7 +153,58 @@ public class GroupBuyingService {
         if (!groupBuyingRepository.existsById(id)) {
             throw new IllegalArgumentException("존재하지 않는 공동구매입니다.");
         }
+
         groupBuyingRepository.deleteById(id);
+    }
+    
+    /**
+     * 통합 필터링 및 페이징 조회 (거리 계산 포함)
+     * 
+     * @param search 검색어 (제목)
+     * @param category 카테고리
+     * @param status 상태
+     * @param userLat 사용자 위도
+     * @param userLng 사용자 경도
+     * @param maxDistance 최대 거리 (km)
+     * @param page 페이지 번호 (0부터 시작)
+     * @param size 페이지 크기
+     * @return 페이지네이션된 공동구매 목록 (거리 정보 포함)
+     */
+    public GroupBuyingPageResponse getGroupBuyingsWithFilters(
+            String search,
+            Category category,
+            Status status,
+            Double userLat,
+            Double userLng,
+            Double maxDistance,
+            int page,
+            int size) {
+        
+        Pageable pageable = PageRequest.of(page, size);
+        
+        Page<Object[]> result = groupBuyingRepository.findWithFiltersAndDistance(
+                search, category, status, userLat, userLng, maxDistance, pageable
+        );
+        
+        // Object[] -> GroupBuyingResponse 변환 (거리 정보 포함)
+        List<GroupBuyingResponse> content = result.getContent().stream()
+                .map(row -> {
+                    GroupBuying groupBuying = (GroupBuying) row[0];
+                    Double distance = row[1] != null ? ((Number) row[1]).doubleValue() : null;
+                    return GroupBuyingResponse.from(groupBuying, distance);
+                })
+                .collect(Collectors.toList());
+        
+        return GroupBuyingPageResponse.builder()
+                .content(content)
+                .totalPages(result.getTotalPages())
+                .totalElements(result.getTotalElements())
+                .number(result.getNumber())
+                .size(result.getSize())
+                .first(result.isFirst())
+                .last(result.isLast())
+                .hasNext(result.hasNext())
+                .build();
     }
     
 }

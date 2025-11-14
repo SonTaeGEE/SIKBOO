@@ -3,6 +3,7 @@ package com.stg.sikboo.groupbuying.dto.response;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.stg.sikboo.groupbuying.domain.GroupBuying;
 import com.stg.sikboo.groupbuying.domain.GroupBuying.Category;
 import com.stg.sikboo.groupbuying.domain.GroupBuying.Status;
@@ -30,12 +31,26 @@ public class GroupBuyingResponse {
     private String pickupLocation;
     private BigDecimal pickupLatitude;
     private BigDecimal pickupLongitude;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS][XXX][X]", timezone = "Asia/Seoul")
     private LocalDateTime deadline;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS][XXX][X]", timezone = "Asia/Seoul")
     private LocalDateTime createdAt;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS][XXX][X]", timezone = "Asia/Seoul")
     private LocalDateTime updatedAt;
+    
     private Status status;
     
+    // 거리 (km) - 사용자 위치 기반 계산 시 사용
+    private Double distance;
+
     public static GroupBuyingResponse from(GroupBuying groupBuying) {
+        return from(groupBuying, null);
+    }
+    
+    public static GroupBuyingResponse from(GroupBuying groupBuying, Double distance) {
         return GroupBuyingResponse.builder()
                 .groupBuyingId(groupBuying.getGroupBuyingId())
                 .memberId(groupBuying.getMember().getId())
@@ -53,6 +68,7 @@ public class GroupBuyingResponse {
                 .createdAt(groupBuying.getCreatedAt())
                 .updatedAt(groupBuying.getUpdatedAt())
                 .status(groupBuying.getStatus())
+                .distance(distance) // 거리 계산 시 별도로 설정
                 .build();
     }
 }

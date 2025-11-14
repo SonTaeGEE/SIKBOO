@@ -3,9 +3,14 @@ package com.stg.sikboo.participant.domain.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.stg.sikboo.groupbuying.domain.GroupBuying;
+import com.stg.sikboo.groupbuying.domain.GroupBuying.Category;
 import com.stg.sikboo.member.domain.Member;
 import com.stg.sikboo.participant.domain.Participant;
 
@@ -31,4 +36,28 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
     boolean existsByGroupBuyingAndMember(GroupBuying groupBuying, Member member);
     
     Optional<Participant> findByGroupBuyingAndMember(GroupBuying groupBuying, Member member);
+    
+    /**
+     * 특정 회원이 참여한 공동구매 목록을 필터링 및 페이징 조회
+     * 
+     * @param memberId 회원 ID
+     * @param search 검색어 (제목)
+     * @param category 카테고리 (null이면 전체)
+     * @param pageable 페이징 정보
+     * @return 필터링된 참여 공동구매 목록
+     */
+    @Query("""
+        SELECT p.groupBuying
+        FROM Participant p
+        WHERE p.member.id = :memberId
+        AND (:search IS NULL OR :search = '' OR LOWER(CAST(p.groupBuying.title AS string)) LIKE LOWER(CONCAT('%', :search, '%')))
+        AND (:category IS NULL OR p.groupBuying.category = :category)
+        ORDER BY p.joinedAt DESC
+        """)
+    Page<GroupBuying> findMyParticipatingGroupBuyingsWithFilters(
+            @Param("memberId") Long memberId,
+            @Param("search") String search,
+            @Param("category") Category category,
+            Pageable pageable
+    );
 }
