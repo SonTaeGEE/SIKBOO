@@ -154,6 +154,14 @@ public class RecipeService {
         session.setMemberId(memberId);
         session.setName("레시피 생성중…");
         session.setDetail(emptyPayloadJson());
+
+        // ★ 현재 회원의 마지막 display_order + 1 로 설정
+        Long maxOrder = recipeRepository.findMaxDisplayOrderByMemberId(memberId);
+        if (maxOrder == null) {
+            maxOrder = 0L;
+        }
+        session.setDisplayOrder(maxOrder + 1);
+
         recipeRepository.save(session);
 
         Long sessionId = session.getId();
@@ -491,11 +499,11 @@ public class RecipeService {
     // 세션(방) 목록/상세 (JPA)
     // =========================
     public List<Map<String, Object>> listSessions(Long memberId) {
-        List<Recipe> list = recipeRepository.findByMemberId(memberId);
+        // ★ display_order 기준으로 정렬된 목록
+        List<Recipe> list = recipeRepository.findByMemberIdOrderByDisplayOrderAsc(memberId);
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
         return list.stream()
-                .sorted(Comparator.comparing(Recipe::getCreatedAt).reversed())
                 .map(r -> {
                     Map<String, Object> m = new HashMap<>();
                     m.put("id", r.getId());
@@ -534,6 +542,63 @@ public class RecipeService {
         // 프론트 폴링을 위한 생성중 플래그
         ret.put("generating", generatingSessions.contains(id));
         return ret;
+    }
+
+    /** 세션 제목 수정 */
+    public Map<String, Object> updateSessionTitle(Long memberId, Long sessionId, String title) {
+        Recipe e = recipeRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 세션"));
+
+        if (!Objects.equals(e.getMemberId(), memberId)) {
+            throw new IllegalArgumentException("본인 세션만 수정할 수 있습니다.");
+        }
+
+        String newTitle = (title == null || title.isBlank())
+                ? e.getName()
+                : title.trim();
+
+        e.setName(newTitle);
+        recipeRepository.save(e);
+
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+        Map<String, Object> ret = new HashMap<>();
+        ret.put("id", e.getId());
+        ret.put("title", e.getName());
+        ret.put("createdAt", e.getCreatedAt() == null ? null : fmt.format(e.getCreatedAt()));
+        ret.put("generating", generatingSessions.contains(e.getId()));
+        return ret;
+    }
+
+    /** 세션 삭제 */
+    public void deleteSession(Long memberId, Long sessionId) {
+        Recipe e = recipeRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 세션"));
+
+        if (!Objects.equals(e.getMemberId(), memberId)) {
+            throw new IllegalArgumentException("본인 세션만 삭제할 수 있습니다.");
+        }
+
+        generatingSessions.remove(sessionId);
+        recipeRepository.delete(e);
+    }
+
+    /** 세션 순서 재정렬 (drag & drop 결과 저장) */
+    public void reorderSessions(Long memberId, List<Long> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) return;
+
+        List<Recipe> recipes = recipeRepository.findByMemberIdAndIdIn(memberId, orderedIds);
+        Map<Long, Recipe> map = recipes.stream()
+                .collect(Collectors.toMap(Recipe::getId, r -> r));
+
+        long order = 1L;
+        for (Long id : orderedIds) {
+            Recipe r = map.get(id);
+            if (r == null) continue;
+            r.setDisplayOrder(order++);
+        }
+
+        recipeRepository.saveAll(map.values());
     }
 
     // ====== 내부 DTO ======

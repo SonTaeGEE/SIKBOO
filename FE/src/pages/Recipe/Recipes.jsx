@@ -33,7 +33,7 @@ export default function Recipes() {
 
   const [selected, setSelected] = useState(() => new Set());
 
-  // ★ 검색어 상태 (생성 탭: 재료, 목록 탭: 세션 제목)
+  // ★ 검색어 상태
   const [ingredientKeyword, setIngredientKeyword] = useState('');
   const [sessionKeyword, setSessionKeyword] = useState('');
 
@@ -72,12 +72,12 @@ export default function Recipes() {
     enabled: tab === Tab.CREATE,
   });
 
-  // 재료 검색 필터링
+  // 재료 검색 필터
   const filteredIngredients = useMemo(() => {
     if (!my.data) return [];
-    const q = ingredientKeyword.trim().toLowerCase();
-    if (!q) return my.data;
-    return my.data.filter((it) => (it.name || '').toLowerCase().includes(q));
+    const kw = ingredientKeyword.trim().toLowerCase();
+    if (!kw) return my.data;
+    return my.data.filter((it) => (it.name || '').toLowerCase().includes(kw));
   }, [my.data, ingredientKeyword]);
 
   const toggle = (id) =>
@@ -195,13 +195,105 @@ export default function Recipes() {
     enabled: tab === Tab.LIST,
   });
 
-  // 세션 검색 필터링
+  // ▼ 정렬 / 편집 관련 상태
+  const [sessionOrder, setSessionOrder] = useState([]);
+  const [draggingId, setDraggingId] = useState(null);
+  const [menuOpenId, setMenuOpenId] = useState(null);
+  const [editingRoomId, setEditingRoomId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState('');
+
+  // 세션 목록이 바뀌면 로컬 정렬 상태 초기화
+  useEffect(() => {
+    if (sessions.data) {
+      setSessionOrder(sessions.data);
+    }
+  }, [sessions.data]);
+
+  // 바깥 클릭 시 메뉴 닫기
+  useEffect(() => {
+    const close = () => setMenuOpenId(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, []);
+
+  // 세션 검색 + 정렬 적용
   const filteredSessions = useMemo(() => {
-    if (!sessions.data) return [];
-    const q = sessionKeyword.trim().toLowerCase();
-    if (!q) return sessions.data;
-    return sessions.data.filter((room) => (room.title || '').toLowerCase().includes(q));
-  }, [sessions.data, sessionKeyword]);
+    const list = sessionOrder || [];
+    const kw = sessionKeyword.trim().toLowerCase();
+    if (!kw) return list;
+    return list.filter((room) => (room.title || '').toLowerCase().includes(kw));
+  }, [sessionOrder, sessionKeyword]);
+
+  // 드래그 정렬
+  const handleDragStart = (id) => {
+    setDraggingId(id);
+  };
+
+  const handleDragEnter = (targetId) => {
+    if (!draggingId || draggingId === targetId) return;
+
+    setSessionOrder((prev) => {
+      const currentIndex = prev.findIndex((r) => r.id === draggingId);
+      const targetIndex = prev.findIndex((r) => r.id === targetId);
+      if (currentIndex === -1 || targetIndex === -1) return prev;
+
+      const next = [...prev];
+      const [moved] = next.splice(currentIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  };
+
+  const reorderMutation = useMutation({
+    mutationFn: (orderedIds) => recipeApi.reorderSessions(orderedIds),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qKeys.sessions });
+    },
+  });
+
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    if (!sessionOrder || sessionOrder.length === 0) return;
+    const orderedIds = sessionOrder.map((r) => r.id);
+    reorderMutation.mutate(orderedIds);
+  };
+
+  // 제목 수정 / 삭제 mutation
+  const updateTitleMutation = useMutation({
+    mutationFn: ({ id, title }) => recipeApi.updateSessionTitle(id, title),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qKeys.sessions });
+    },
+  });
+
+  const deleteSessionMutation = useMutation({
+    mutationFn: (id) => recipeApi.deleteSession(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qKeys.sessions });
+    },
+  });
+
+  const submitTitleChange = (room) => {
+    const nextTitle = editingTitle.trim();
+    if (!nextTitle) {
+      alert('제목을 입력해주세요.');
+      return;
+    }
+    if (nextTitle === room.title) {
+      setEditingRoomId(null);
+      return;
+    }
+
+    updateTitleMutation.mutate(
+      { id: room.id, title: nextTitle },
+      {
+        onSuccess: () => {
+          setEditingRoomId(null);
+          setEditingTitle('');
+        },
+      },
+    );
+  };
 
   const selCount = selected.size;
 
@@ -242,115 +334,178 @@ export default function Recipes() {
       <div className="px-4 pt-3 md:px-6 lg:px-8">
         {tab === Tab.CREATE ? (
           <>
+            {/* 재료 검색 */}
+            <div className="mb-3">
+              <input
+                type="text"
+                value={ingredientKeyword}
+                onChange={(e) => setIngredientKeyword(e.target.value)}
+                placeholder="재료 이름 검색"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+              />
+            </div>
+
             {my.isLoading && <div className="py-10 text-center text-slate-500">불러오는 중…</div>}
             {my.isError && <ErrorBox error={my.error} />}
-
-            {!my.isLoading && !my.isError && my.data && my.data.length === 0 && (
-              <Empty text="등록된 내 재료가 없어요." />
-            )}
-
-            {!my.isLoading && !my.isError && my.data && my.data.length > 0 && (
-              <>
-                {/* 재료 검색 인풋 */}
-                <div className="mb-3">
-                  <input
-                    type="text"
-                    value={ingredientKeyword}
-                    onChange={(e) => setIngredientKeyword(e.target.value)}
-                    placeholder="재료 이름 검색 (예: 바나나)"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
-                  />
-                </div>
-
-                {/* 재료 리스트 (검색 반영) */}
-                {filteredIngredients.length === 0 ? (
-                  <Empty text="검색 결과에 해당하는 재료가 없어요." />
-                ) : (
-                  <ul className="divide-y">
-                    {filteredIngredients.map((it) => (
-                      <IngredientRow
-                        key={it.id}
-                        it={it}
-                        selected={selected.has(it.id)}
-                        onToggle={toggle}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </>
-            )}
+            {!my.isLoading &&
+              !my.isError &&
+              (filteredIngredients.length === 0 ? (
+                <Empty text="조건에 맞는 재료가 없어요." />
+              ) : (
+                <ul className="divide-y">
+                  {filteredIngredients.map((it) => (
+                    <IngredientRow
+                      key={it.id}
+                      it={it}
+                      selected={selected.has(it.id)}
+                      onToggle={toggle}
+                    />
+                  ))}
+                </ul>
+              ))}
           </>
         ) : (
           <>
             <SectionTitle>내가 만든 레시피 방</SectionTitle>
+
+            {/* 레시피 방 검색 */}
+            <div className="mb-3">
+              <input
+                type="text"
+                value={sessionKeyword}
+                onChange={(e) => setSessionKeyword(e.target.value)}
+                placeholder="레시피 방 제목 검색"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+              />
+            </div>
+
             {sessions.isLoading ? (
               <Skeleton />
             ) : sessions.isError ? (
               <ErrorBox error={sessions.error} />
-            ) : !sessions.data || sessions.data.length === 0 ? (
-              <Empty text="아직 생성된 방이 없어요. 생성 탭에서 만들어보세요!" />
+            ) : filteredSessions.length === 0 ? (
+              <Empty text="조건에 맞는 레시피 방이 없어요." />
             ) : (
-              <>
-                {/* 세션 검색 인풋 */}
-                <div className="mb-3">
-                  <input
-                    type="text"
-                    value={sessionKeyword}
-                    onChange={(e) => setSessionKeyword(e.target.value)}
-                    placeholder="레시피 방 제목 검색"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
-                  />
-                </div>
+              <div className="mb-10 space-y-2">
+                {filteredSessions.map((room) => {
+                  const isCurrentGeneratingRoom =
+                    waitingSessionId != null && room.id === waitingSessionId && generatingVisible;
 
-                {filteredSessions.length === 0 ? (
-                  <Empty text="검색 결과에 해당하는 레시피 방이 없어요." />
-                ) : (
-                  <div className="mb-10 space-y-2">
-                    {filteredSessions.map((room) => {
-                      const isCurrentGeneratingRoom =
-                        waitingSessionId != null &&
-                        room.id === waitingSessionId &&
-                        generatingVisible;
+                  const createdAtText = room.createdAt
+                    ? new Date(room.createdAt).toLocaleString()
+                    : '';
 
-                      const createdAtText = room.createdAt
-                        ? new Date(room.createdAt).toLocaleString()
-                        : '';
+                  const isDragging = draggingId === room.id;
+                  const isEditing = editingRoomId === room.id;
 
-                      return (
-                        <button
-                          key={room.id}
-                          type="button"
-                          disabled={isCurrentGeneratingRoom}
-                          onClick={() => {
-                            if (isCurrentGeneratingRoom) return; // 생성중이면 진입 막기
-                            sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
-                            navigate(`/recipes/sessions/${room.id}`);
-                          }}
+                  return (
+                    <div
+                      key={room.id}
+                      className={cx(
+                        'relative w-full transition-transform duration-150',
+                        isDragging && 'scale-[1.01] shadow-lg ring-2 ring-indigo-200',
+                      )}
+                      onDragEnter={() => handleDragEnter(room.id)}
+                      onDragOver={(e) => e.preventDefault()}
+                    >
+                      <button
+                        type="button"
+                        disabled={isCurrentGeneratingRoom}
+                        onClick={() => {
+                          if (isCurrentGeneratingRoom || isEditing) return; // 생성중이거나 편집 중이면 진입 막기
+                          sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
+                          navigate(`/recipes/sessions/${room.id}`);
+                        }}
+                        className={cx(
+                          'flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition',
+                          isCurrentGeneratingRoom
+                            ? 'cursor-not-allowed bg-gradient-to-r from-emerald-100 via-emerald-50 to-emerald-100 opacity-95'
+                            : 'bg-white hover:bg-indigo-50',
+                        )}
+                      >
+                        {/* 드래그 핸들 (석 삼 모양) */}
+                        <div
                           className={cx(
-                            'w-full rounded-xl border px-4 py-3 text-left transition',
-                            isCurrentGeneratingRoom
-                              ? 'cursor-not-allowed bg-gradient-to-r from-emerald-100 via-emerald-50 to-emerald-100 opacity-95'
-                              : 'bg-white hover:bg-indigo-50',
+                            'mr-1 flex h-8 w-4 cursor-grab flex-col items-center justify-center text-slate-400',
+                            isDragging && 'cursor-grabbing',
                           )}
+                          draggable
+                          onDragStart={(e) => {
+                            e.stopPropagation();
+                            handleDragStart(room.id);
+                          }}
+                          onDragEnd={(e) => {
+                            e.stopPropagation();
+                            handleDragEnd();
+                          }}
+                          onDragOver={(e) => e.preventDefault()}
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              {/* 생성중일 때는 항상 이 텍스트로 & 깜빡이게 */}
-                              <span
-                                className={cx(
-                                  'font-semibold',
-                                  isCurrentGeneratingRoom && 'animate-pulse text-black',
-                                )}
-                              >
-                                {isCurrentGeneratingRoom ? '레시피 생성중…' : room.title}
-                              </span>
+                          <span className="mb-[3px] h-[2px] w-3 rounded-full bg-slate-300" />
+                          <span className="mb-[3px] h-[2px] w-3 rounded-full bg-slate-300" />
+                          <span className="h-[2px] w-3 rounded-full bg-slate-300" />
+                        </div>
+
+                        <div className="flex min-w-0 flex-1 flex-col gap-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                              {/* 제목 / 편집 모드 */}
+                              {isEditing ? (
+                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                  <textarea
+                                    rows={1}
+                                    value={editingTitle}
+                                    onChange={(e) => setEditingTitle(e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        submitTitleChange(room);
+                                      }
+                                    }}
+                                    className="max-h-20 min-h-[36px] flex-1 resize-none rounded-md border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      submitTitleChange(room);
+                                    }}
+                                    className="shrink-0 rounded-md bg-indigo-500 px-3 py-1 text-xs font-semibold text-white"
+                                  >
+                                    확인
+                                  </button>
+                                </div>
+                              ) : (
+                                <span
+                                  className={cx(
+                                    'truncate font-semibold',
+                                    isCurrentGeneratingRoom && 'animate-pulse text-black',
+                                  )}
+                                >
+                                  {isCurrentGeneratingRoom ? '레시피 생성중…' : room.title}
+                                </span>
+                              )}
                             </div>
-                            <div className="text-xs text-slate-500">{createdAtText}</div>
+
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              {/* 옵션 메뉴(점 3개) */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuOpenId((prev) => (prev === room.id ? null : room.id));
+                                }}
+                                className="flex h-6 w-6 items-center justify-center rounded-full text-lg leading-none text-slate-400 hover:bg-slate-100"
+                              >
+                                <span className="translate-y-[-1px]">⋮</span>
+                              </button>
+                              <span>{createdAtText}</span>
+                            </div>
                           </div>
 
                           {/* 이 방이 현재 생성중일 때만 진행률 바 노출 */}
                           {isCurrentGeneratingRoom && (
-                            <div className="mt-2">
+                            <div className="mt-1">
                               <div className="mb-1 flex items-center justify-between text-[11px] text-slate-600">
                                 <span>
                                   진행률 {progressStep}/10 ({progressPercent}%)
@@ -364,12 +519,48 @@ export default function Recipes() {
                               </div>
                             </div>
                           )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
+                        </div>
+                      </button>
+
+                      {/* 점3개 메뉴 */}
+                      {menuOpenId === room.id && (
+                        <div
+                          className="absolute top-2 right-4 z-20 w-32 rounded-md border border-slate-200 bg-white text-xs shadow-lg"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-2 text-left hover:bg-slate-100"
+                            onClick={() => {
+                              setEditingRoomId(room.id);
+                              setEditingTitle(room.title || '');
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            제목 수정하기
+                          </button>
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              if (
+                                window.confirm(
+                                  '정말 이 레시피 방을 삭제할까요?\n삭제 후에는 되돌릴 수 없어요.',
+                                )
+                              ) {
+                                deleteSessionMutation.mutate(room.id);
+                              }
+                            }}
+                          >
+                            삭제하기
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </>
         )}

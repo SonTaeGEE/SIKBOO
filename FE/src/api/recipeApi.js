@@ -61,6 +61,36 @@ const recipeApi = {
     );
     return data;
   },
+
+  /** 레시피 방 제목 수정 */
+  updateSessionTitle: async (sessionId, title) => {
+    const { data } = await axiosInstance.patch(
+      `/recipes/sessions/${sessionId}`,
+      { title },
+      {
+        withCredentials: true,
+      },
+    );
+    return data;
+  },
+
+  /** 레시피 방 삭제 */
+  deleteSession: async (sessionId) => {
+    await axiosInstance.delete(`/recipes/sessions/${sessionId}`, {
+      withCredentials: true,
+    });
+  },
+
+  /** 레시피 방 순서 재정렬 저장 */
+  reorderSessions: async (orderedIds) => {
+    await axiosInstance.patch(
+      '/recipes/sessions/reorder',
+      { orderedIds },
+      {
+        withCredentials: true,
+      },
+    );
+  },
 };
 
 export default recipeApi;

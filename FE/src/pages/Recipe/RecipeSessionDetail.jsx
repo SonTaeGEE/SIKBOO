@@ -26,7 +26,8 @@ export default function RecipeSessionDetail() {
 
   return (
     <div className="mx-auto min-h-[100dvh] w-full max-w-full bg-[#F8F3FF] px-4 pt-3 pb-[88px] md:max-w-screen-md md:px-6 lg:max-w-4xl lg:px-8">
-      <h1 className="mb-2 text-lg font-bold">{title}</h1>
+      {/* 상단: 방 제목만 표시 (편집/삭제 없음) */}
+      <h1 className="mb-3 text-lg font-bold break-words">{title}</h1>
 
       {/* 건강/알레르기 안내문 */}
       {notice && (
