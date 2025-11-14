@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createGroupBuying,
   getGroupBuying,
@@ -13,6 +13,8 @@ import {
   getMyParticipatingGroupBuyings,
   checkParticipation,
   getParticipantsByGroupBuying,
+  searchGroupBuyings,
+  searchMyParticipatingGroupBuyings,
 } from '@/api/groupBuyingApi';
 
 // Query Keys
@@ -217,5 +219,82 @@ export const useParticipantsByGroupBuying = (groupBuyingId) => {
     queryKey: groupBuyingKeys.participants(groupBuyingId),
     queryFn: () => getParticipantsByGroupBuying(groupBuyingId),
     enabled: !!groupBuyingId,
+  });
+};
+
+/**
+ * 통합 필터링 무한 스크롤 Query (모집중인 공동구매)
+ * @param {Object} filters - 필터 옵션
+ * @param {string} filters.search - 검색어
+ * @param {string} filters.category - 카테고리
+ * @param {string} filters.status - 상태 (기본값: RECRUITING)
+ * @param {number} filters.lat - 사용자 위도
+ * @param {number} filters.lng - 사용자 경도
+ * @param {number} filters.distance - 최대 거리 (km)
+ * @param {number} filters.pageSize - 페이지 크기 (기본값: 20)
+ */
+export const useInfiniteGroupBuyings = (filters = {}) => {
+  const { search, category, status = 'RECRUITING', lat, lng, distance, pageSize = 20 } = filters;
+
+  return useInfiniteQuery({
+    queryKey: ['groupBuyings', 'infinite', { search, category, status, lat, lng, distance }],
+    queryFn: ({ pageParam = 0 }) =>
+      searchGroupBuyings({
+        search,
+        category,
+        status,
+        lat,
+        lng,
+        distance,
+        page: pageParam,
+        size: pageSize,
+      }),
+    getNextPageParam: (lastPage) => {
+      // hasNext가 true면 다음 페이지 번호 반환, 아니면 undefined
+      return lastPage.hasNext ? lastPage.number + 1 : undefined;
+    },
+    initialPageParam: 0,
+    // 페이지 데이터 병합
+    select: (data) => ({
+      pages: data.pages,
+      pageParams: data.pageParams,
+      // 모든 페이지의 content를 하나의 배열로 병합
+      items: data.pages.flatMap((page) => page.content),
+    }),
+    enabled: !!lat && !!lng, // lat, lng가 있을 때만 쿼리 실행
+  });
+};
+
+/**
+ * 내가 참여한 공동구매 무한 스크롤 Query
+ * @param {Object} filters - 필터 옵션
+ * @param {number} filters.memberId - 회원 ID
+ * @param {string} filters.search - 검색어
+ * @param {string} filters.category - 카테고리
+ * @param {number} filters.pageSize - 페이지 크기 (기본값: 20)
+ */
+export const useInfiniteMyParticipatingGroupBuyings = (filters = {}) => {
+  const { memberId, search, category, pageSize = 20 } = filters;
+
+  return useInfiniteQuery({
+    queryKey: ['myParticipating', 'infinite', { memberId, search, category }],
+    queryFn: ({ pageParam = 0 }) =>
+      searchMyParticipatingGroupBuyings({
+        memberId,
+        search,
+        category,
+        page: pageParam,
+        size: pageSize,
+      }),
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasNext ? lastPage.number + 1 : undefined;
+    },
+    initialPageParam: 0,
+    enabled: !!memberId, // memberId가 있을 때만 쿼리 실행
+    select: (data) => ({
+      pages: data.pages,
+      pageParams: data.pageParams,
+      items: data.pages.flatMap((page) => page.content),
+    }),
   });
 };

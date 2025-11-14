@@ -1,38 +1,96 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MapPin, Plus, Search } from 'lucide-react';
 
 import { useKakaoMap } from '@/hooks/useKakaoMap';
-import { useActiveGroupBuyings, useMyParticipatingGroupBuyings } from '@/hooks/useGroupBuying';
+import {
+  useInfiniteGroupBuyings,
+  useInfiniteMyParticipatingGroupBuyings,
+} from '@/hooks/useGroupBuying';
 import { useCurrentUser } from '@/hooks/useUser';
-import { calculateDistance } from '@/utils/calculateDistance';
 import { GROUP_BUYING_CATEGORY } from '@/constants/category';
 import GroupBuyingCard from '@/components/GroupBuying/GroupBuyingCard';
 import Loading from '@/components/common/Loading';
 
 const GroupBuying = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isLoaded } = useKakaoMap();
   const [location, setLocation] = useState('위치를 가져오는 중...');
   const [currentPosition, setCurrentPosition] = useState(null); // { lat, lng }
-  const [searchQuery, setSearchQuery] = useState('');
-  const [category, setCategory] = useState('all');
-  const [activeTab, setActiveTab] = useState('recruiting'); // 'recruiting' or 'joined'
-  const [distanceFilter, setDistanceFilter] = useState('5'); // '1', '3', '5', '7', '10'
+  const [distanceFilter, setDistanceFilter] = useState('5'); // '1', '3', '5', '7', '10' (UI 상태만)
+
+  // QueryString에서 검색어, 카테고리, 탭 가져오기
+  const searchQuery = searchParams.get('search') || '';
+  const category = searchParams.get('category') || 'all';
+  const activeTab = searchParams.get('tab') || 'recruiting';
+
+  // QueryString 업데이트 헬퍼 함수
+  const updateQueryString = (updates) => {
+    const newParams = new URLSearchParams(searchParams);
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value && value !== 'all') {
+        newParams.set(key, value);
+      } else {
+        newParams.delete(key);
+      }
+    });
+
+    setSearchParams(newParams, { replace: true });
+  };
+
+  // 검색어 변경
+  const handleSearchChange = (value) => {
+    updateQueryString({ search: value, category, tab: activeTab });
+  };
+
+  // 카테고리 변경
+  const handleCategoryChange = (newCategory) => {
+    updateQueryString({ search: searchQuery, category: newCategory, tab: activeTab });
+  };
+
+  // 탭 변경
+  const handleTabChange = (newTab) => {
+    updateQueryString({ search: searchQuery, category, tab: newTab });
+  };
+
+  // 무한 스크롤 감지용 ref
+  const observerTarget = useRef(null);
 
   // 로그인한 사용자 정보 가져오기
   const { data: currentUser } = useCurrentUser();
 
-  // 모집중인 공동구매 목록 조회 (recruiting 탭일 때만)
-  const { data: activeGroupBuyings = [], isLoading: isLoadingActive } = useActiveGroupBuyings({
-    enabled: activeTab === 'recruiting',
+  // 모집중인 공동구매 무한 스크롤 조회 (recruiting 탭일 때만)
+  const {
+    data: infiniteRecruitingData,
+    isLoading: isLoadingActive,
+    isFetchingNextPage: isFetchingNextRecruiting,
+    hasNextPage: hasNextRecruiting,
+    fetchNextPage: fetchNextRecruiting,
+  } = useInfiniteGroupBuyings({
+    search: searchQuery || undefined,
+    category: category === 'all' ? undefined : category,
+    status: 'RECRUITING',
+    lat: currentPosition?.lat,
+    lng: currentPosition?.lng,
+    distance: parseFloat(distanceFilter),
+    pageSize: 20,
   });
 
-  // 내가 참여한 공동구매 목록 조회 (joined 탭일 때만, currentUser가 있을 때만)
-  const { data: myParticipatingGroupBuyings = [], isLoading: isLoadingMy } =
-    useMyParticipatingGroupBuyings(currentUser?.id, {
-      enabled: activeTab === 'joined' && !!currentUser?.id,
-    });
+  // 내가 참여한 공동구매 무한 스크롤 조회 (joined 탭일 때만)
+  const {
+    data: infiniteMyData,
+    isLoading: isLoadingMy,
+    isFetchingNextPage: isFetchingNextMy,
+    hasNextPage: hasNextMy,
+    fetchNextPage: fetchNextMy,
+  } = useInfiniteMyParticipatingGroupBuyings({
+    memberId: currentUser?.id,
+    search: searchQuery || undefined,
+    category: category === 'all' ? undefined : category,
+    pageSize: 20,
+  });
 
   // 현재 위치 가져오기
   useEffect(() => {
@@ -80,41 +138,53 @@ const GroupBuying = () => {
     getCurrentLocation();
   }, [isLoaded]);
 
+  // 무한 스크롤 IntersectionObserver 설정
+  useEffect(() => {
+    const hasNext = activeTab === 'recruiting' ? hasNextRecruiting : hasNextMy;
+    const isFetching = activeTab === 'recruiting' ? isFetchingNextRecruiting : isFetchingNextMy;
+    const fetchNext = activeTab === 'recruiting' ? fetchNextRecruiting : fetchNextMy;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNext && !isFetching) {
+          fetchNext();
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    const target = observerTarget.current;
+    if (target) {
+      observer.observe(target);
+    }
+
+    return () => {
+      if (target) {
+        observer.unobserve(target);
+      }
+    };
+  }, [
+    activeTab,
+    hasNextRecruiting,
+    hasNextMy,
+    isFetchingNextRecruiting,
+    isFetchingNextMy,
+    fetchNextRecruiting,
+    fetchNextMy,
+  ]);
+
   // 현재 탭에 따라 데이터 선택
   const currentItems =
-    activeTab === 'recruiting' ? activeGroupBuyings : myParticipatingGroupBuyings;
-
-  // 필터링된 아이템 (거리 정보 포함)
-  const filteredItems = currentItems
-    .map((item) => {
-      // 거리 계산
-      let distance = null;
-      if (currentPosition && item.pickupLatitude && item.pickupLongitude) {
-        distance = calculateDistance(
-          currentPosition.lat,
-          currentPosition.lng,
-          item.pickupLatitude,
-          item.pickupLongitude,
-        );
-      }
-      return { ...item, distance };
-    })
-    .filter((item) => {
-      const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = category === 'all' || item.category === category;
-
-      // 거리 필터링
-      let matchesDistance = true;
-      if (item.distance !== null) {
-        const maxDistance = parseFloat(distanceFilter);
-        matchesDistance = item.distance <= maxDistance;
-      }
-
-      return matchesSearch && matchesCategory && matchesDistance;
-    });
+    activeTab === 'recruiting'
+      ? infiniteRecruitingData?.items || [] // 모집중인 공동구매 (거리 계산 포함, 백엔드 필터링)
+      : infiniteMyData?.items || []; // 내 공동구매 (백엔드 필터링)
 
   // 로딩 상태
   const isLoading = activeTab === 'recruiting' ? isLoadingActive : isLoadingMy;
+
+  // 현재 탭의 무한 스크롤 상태
+  const isFetchingNextPage =
+    activeTab === 'recruiting' ? isFetchingNextRecruiting : isFetchingNextMy;
 
   return (
     <div className="min-h-full">
@@ -136,7 +206,7 @@ const GroupBuying = () => {
               type="text"
               placeholder="검색어를 입력해주세요"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full rounded-lg border border-[#e0e0e0] bg-white py-3 pr-4 pl-11 text-[#333333] placeholder-[#999999] focus:border-[#5f0080] focus:outline-none"
             />
           </div>
@@ -159,7 +229,7 @@ const GroupBuying = () => {
         {/* Main Tabs - 모집중 / 내 공동구매 */}
         <div className="mb-4 flex gap-2 rounded-lg bg-white p-1 shadow-sm">
           <button
-            onClick={() => setActiveTab('recruiting')}
+            onClick={() => handleTabChange('recruiting')}
             className={`flex-1 rounded-md py-2.5 text-sm font-medium transition ${
               activeTab === 'recruiting'
                 ? 'bg-[#5f0080] text-white'
@@ -169,7 +239,7 @@ const GroupBuying = () => {
             모집중인 공동구매
           </button>
           <button
-            onClick={() => setActiveTab('joined')}
+            onClick={() => handleTabChange('joined')}
             className={`flex-1 rounded-md py-2.5 text-sm font-medium transition ${
               activeTab === 'joined' ? 'bg-[#5f0080] text-white' : 'text-[#666666] hover:bg-gray-50'
             }`}
@@ -184,7 +254,7 @@ const GroupBuying = () => {
             {GROUP_BUYING_CATEGORY.map((cat) => (
               <button
                 key={cat.id}
-                onClick={() => setCategory(cat.id)}
+                onClick={() => handleCategoryChange(cat.id)}
                 className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 font-medium whitespace-nowrap transition ${
                   category === cat.id
                     ? 'border-[#5f0080] text-[#5f0080]'
@@ -233,13 +303,13 @@ const GroupBuying = () => {
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-base font-bold text-[#333333]">
               {activeTab === 'recruiting' ? '모집중인 공동구매' : '내 공동구매'}{' '}
-              <span className="text-[#5f0080]">{filteredItems.length}</span>
+              <span className="text-[#5f0080]">{currentItems.length}</span>
             </h3>
           </div>
 
           {isLoading ? (
             <Loading message="공동구매 목록을 불러오는 중..." />
-          ) : filteredItems.length === 0 ? (
+          ) : currentItems.length === 0 ? (
             <div className="rounded-lg bg-gray-50 py-16 text-center">
               <p className="text-sm text-gray-500">
                 {activeTab === 'recruiting'
@@ -248,15 +318,26 @@ const GroupBuying = () => {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3">
-              {filteredItems.map((item) => (
-                <GroupBuyingCard
-                  key={item.groupBuyingId}
-                  item={item}
-                  showDistance={activeTab === 'recruiting'}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 gap-3">
+                {currentItems.map((item) => (
+                  <GroupBuyingCard
+                    key={item.groupBuyingId}
+                    item={item}
+                    showDistance={activeTab === 'recruiting'}
+                  />
+                ))}
+              </div>
+
+              {/* 무한 스크롤 로딩 인디케이터 */}
+              {isFetchingNextPage && (
+                <div className="mt-4 text-center">
+                  <Loading message="더 불러오는 중..." />
+                </div>
+              )}
+              {/* IntersectionObserver 타겟 */}
+              <div ref={observerTarget} className="h-4" />
+            </>
           )}
         </div>
 

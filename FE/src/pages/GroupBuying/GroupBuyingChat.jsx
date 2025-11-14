@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, MessageSquare, Wifi, WifiOff } from 'lucide-react';
+import { Send, MessageSquare, Wifi, WifiOff, Loader2 } from 'lucide-react';
 
 import { useGroupBuying } from '@/hooks/useGroupBuying';
 import { useCurrentUser } from '@/hooks/useUser';
@@ -14,6 +14,7 @@ const GroupBuyingChat = () => {
   const navigate = useNavigate();
   const [chatMessage, setChatMessage] = useState('');
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
   // 현재 사용자 정보
   const { data: currentUser } = useCurrentUser();
@@ -21,12 +22,15 @@ const GroupBuyingChat = () => {
   // 공동구매 정보
   const { data: groupBuying, isLoading: isLoadingGroupBuying } = useGroupBuying(id);
 
-  // WebSocket 채팅 (실시간)
+  // WebSocket 채팅 (실시간 + 무한 스크롤)
   const {
     messages,
     sendMessage: sendWebSocketMessage,
     isConnected,
     isLoading: isLoadingMessages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
   } = useChatWebSocket(id, currentUser?.id);
 
   // 스크롤을 맨 아래로 이동
@@ -34,9 +38,49 @@ const GroupBuyingChat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // 초기 로드 시 맨 아래로 스크롤
   useEffect(() => {
-    scrollToBottom();
+    if (!isLoadingMessages && messages.length > 0) {
+      // 초기 로드 완료 후 맨 아래로 이동 (smooth 없이 즉시)
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      }, 100);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoadingMessages]);
+
+  // 새 메시지가 추가되면 스크롤 (본인이 보낸 메시지거나 맨 아래에 있을 때만)
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || messages.length === 0) return;
+
+    const isScrolledToBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+
+    if (isScrolledToBottom) {
+      scrollToBottom();
+    }
   }, [messages]);
+
+  // 스크롤 업 감지 (이전 메시지 로드)
+  const handleScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // 스크롤이 최상단에 도달하고, 더 불러올 메시지가 있을 때
+    if (container.scrollTop === 0 && hasNextPage && !isFetchingNextPage) {
+      const prevHeight = container.scrollHeight;
+      const prevScrollTop = container.scrollTop;
+
+      fetchNextPage().then(() => {
+        // 스크롤 위치 유지 (새 메시지 로드 후에도 같은 위치)
+        requestAnimationFrame(() => {
+          const newHeight = container.scrollHeight;
+          container.scrollTop = prevScrollTop + (newHeight - prevHeight);
+        });
+      });
+    }
+  };
 
   // 메시지 전송 (WebSocket)
   const handleSendMessage = () => {
@@ -96,7 +140,7 @@ const GroupBuyingChat = () => {
     <div className="mx-auto flex h-full max-w-2xl flex-col bg-[#F9F5FF]">
       {/* 연결 상태 표시 */}
       <div
-        className={`px-4 py-2 text-center text-xs font-medium ${
+        className={`shrink-0 px-4 py-2 text-center text-xs font-medium ${
           isConnected ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
         }`}
       >
@@ -116,7 +160,19 @@ const GroupBuyingChat = () => {
       </div>
 
       {/* Chat Messages */}
-      <div className="flex-1 space-y-3 overflow-y-auto p-4 pb-24">
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 space-y-3 overflow-y-auto p-4"
+      >
+        {/* 이전 메시지 로딩 표시 */}
+        {isFetchingNextPage && (
+          <div className="flex justify-center py-2">
+            <Loader2 className="animate-spin text-[#5f0080]" size={20} />
+            <span className="ml-2 text-sm text-gray-500">이전 메시지 로딩 중...</span>
+          </div>
+        )}
+
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-gray-400">
             <p>첫 메시지를 보내보세요!</p>
@@ -133,9 +189,8 @@ const GroupBuyingChat = () => {
         )}
         <div ref={messagesEndRef} />
       </div>
-
       {/* Input - Fixed at bottom */}
-      <div className="fixed right-0 bottom-0 left-0 border-t border-gray-200 bg-white p-4">
+      <div className="shrink-0 border-t border-gray-200 bg-white p-4">
         <div className="mx-auto flex max-w-2xl gap-2">
           <input
             type="text"
