@@ -194,15 +194,21 @@ export default function Ingredients() {
   };
 
   return (
-    <div className="min-h-full pb-24">
-      <div className="mx-auto max-w-6xl px-4 py-4">
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+    <div className="min-h-full bg-[#F8F3FF] pb-24">
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        {/* 상단 필터/검색 영역 */}
+        <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-white/60 p-3 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+          {/* 위치 탭 */}
           <div className="flex flex-wrap gap-2">
             {LOCATION_TABS.map((t) => (
               <button
                 key={String(t.key)}
                 onClick={() => setLocation(t.key)}
-                className={`rounded px-3 py-2 ${location === t.key ? 'bg-[#5f0080] text-white' : 'border bg-white text-[#333]'}`}
+                className={`rounded-full px-4 py-2 text-sm font-medium shadow-sm transition ${
+                  location === t.key
+                    ? 'bg-[#5f0080] text-white'
+                    : 'border border-violet-100 bg-white text-[#333] hover:bg-violet-50'
+                }`}
                 type="button"
               >
                 {t.label}
@@ -210,7 +216,8 @@ export default function Ingredients() {
             ))}
           </div>
 
-          <div className="mt-2 ml-auto flex w-full items-center gap-2 sm:mt-0 sm:w-auto">
+          {/* 검색 & 추가 */}
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <div className="relative min-w-0 flex-1">
               <input
                 value={q}
@@ -220,8 +227,8 @@ export default function Ingredients() {
                     fetchList(0);
                   }
                 }}
-                placeholder="검색"
-                className="w-full rounded border px-2 py-1 pr-8"
+                placeholder="재료 이름 검색"
+                className="w-full rounded-full border border-violet-100 bg-white px-3 py-2 pr-9 text-sm outline-none placeholder:text-slate-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
               />
               {q && (
                 <button
@@ -242,7 +249,7 @@ export default function Ingredients() {
                       console.error(e);
                     }
                   }}
-                  className="absolute top-1/2 right-2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute top-1/2 right-2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   type="button"
                   aria-label="검색어 지우기"
                 >
@@ -261,14 +268,14 @@ export default function Ingredients() {
             </div>
             <button
               onClick={() => fetchList(0)}
-              className="flex-shrink-0 rounded bg-[#5f0080] px-3 py-1 text-white"
+              className="flex-shrink-0 rounded-full bg-[#5f0080] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#4a0064]"
               type="button"
             >
               검색
             </button>
             <button
               onClick={handleAddClick}
-              className="ml-2 flex-shrink-0 rounded bg-green-600 px-3 py-1 text-white"
+              className="flex-shrink-0 rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-600"
               type="button"
             >
               재료 추가
@@ -276,11 +283,34 @@ export default function Ingredients() {
           </div>
         </div>
 
-        <div className="rounded-lg bg-white p-4">
+        {/* 리스트 카드 */}
+        <div className="rounded-2xl bg-white p-4 shadow-md">
           {loading ? (
-            <p>로딩 중...</p>
+            <div className="flex items-center justify-center py-10 text-sm text-slate-500">
+              <svg
+                className="mr-2 h-5 w-5 animate-spin text-violet-500"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                />
+              </svg>
+              로딩 중...
+            </div>
           ) : items.length === 0 ? (
-            <p className="text-center text-sm text-[#999]">
+            <p className="py-10 text-center text-sm text-[#999]">
               {q ? `'${q}'에 해당하는 재료가 없습니다` : '보유한 식재료가 없습니다'}
             </p>
           ) : (
@@ -289,34 +319,46 @@ export default function Ingredients() {
                 {items.map((it) => (
                   <li
                     key={it.id}
-                    className="flex cursor-pointer items-center justify-between border-b pb-2"
+                    className="flex cursor-pointer items-center justify-between rounded-xl border border-violet-50 bg-violet-50/30 px-4 py-3 transition hover:border-violet-200 hover:bg-violet-50"
                   >
                     <div onClick={() => openDetailModal(it)} className="flex-1">
                       {/* ✅ 재료명과 뱃지를 같은 줄에 배치 */}
                       <div className="mb-1 flex items-center gap-2">
-                        <span className="text-lg font-medium text-[#333]">{it.ingredientName}</span>
+                        <span className="text-base font-semibold text-[#333]">
+                          {it.ingredientName}
+                        </span>
                         <Badge daysLeft={it.daysLeft} />
+                        {it.location && (
+                          <span className="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+                            {it.location === '냉장고'
+                              ? '냉장실'
+                              : it.location === '냉동실'
+                                ? '냉동실'
+                                : '실온'}
+                          </span>
+                        )}
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-[#999]">
-                          {formatDateIsoToYMD(it.due)} 까지
-                        </span>
+                      <div className="flex items-center gap-2 text-xs text-[#888]">
+                        <span>{formatDateIsoToYMD(it.due)} 까지</span>
                         {it.memo && (
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4 text-[#999]"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-                            />
-                          </svg>
+                          <div className="inline-flex items-center gap-1">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-4 w-4 text-[#999]"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+                              />
+                            </svg>
+                            <span className="max-w-[180px] truncate align-middle">{it.memo}</span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -326,7 +368,7 @@ export default function Ingredients() {
                         e.stopPropagation();
                         handleDelete(it.id, it.ingredientName);
                       }}
-                      className="rounded p-2 text-gray-500 hover:bg-gray-100"
+                      className="ml-3 rounded-full p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
                       aria-label="삭제"
                       type="button"
                     >
@@ -355,7 +397,7 @@ export default function Ingredients() {
                     <button
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 0}
-                      className="rounded border px-3 py-1 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="rounded-full border border-violet-100 bg-white px-3 py-1 text-sm text-slate-600 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-30"
                       type="button"
                     >
                       ‹
@@ -371,10 +413,10 @@ export default function Ingredients() {
                           <button
                             key={pageNum}
                             onClick={() => handlePageChange(pageNum)}
-                            className={`rounded px-3 py-1 ${
+                            className={`rounded-full px-3 py-1 text-sm ${
                               pageNum === currentPage
-                                ? 'bg-[#5f0080] text-white'
-                                : 'border bg-white text-[#333] hover:bg-gray-100'
+                                ? 'bg-[#5f0080] text-white shadow-sm'
+                                : 'border border-violet-100 bg-white text-[#333] hover:bg-violet-50'
                             }`}
                             type="button"
                           >
@@ -394,14 +436,14 @@ export default function Ingredients() {
                     <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages - 1}
-                      className="rounded border px-3 py-1 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="rounded-full border border-violet-100 bg-white px-3 py-1 text-sm text-slate-600 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-30"
                       type="button"
                     >
                       ›
                     </button>
                   </div>
 
-                  <span className="text-sm text-gray-600">
+                  <span className="text-xs text-gray-600">
                     {currentPage + 1} / {totalPages} 페이지 (전체 {totalElements}개)
                   </span>
                 </div>
@@ -411,63 +453,68 @@ export default function Ingredients() {
         </div>
       </div>
 
+      {/* 플로팅 + 버튼 */}
       <button
         onClick={handleAddClick}
-        className="fixed right-6 bottom-20 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#5f0080] text-2xl text-white shadow-lg"
+        className="fixed right-6 bottom-20 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-[#5f0080] to-fuchsia-500 text-2xl font-bold text-white shadow-xl"
         aria-label="재료 추가"
         type="button"
       >
         +
       </button>
 
+      {/* 추가 모달 */}
       {openAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={submitAdd} className="w-full max-w-md rounded-lg bg-white p-6">
-            <h3 className="mb-4 text-center text-lg font-bold">재료 추가</h3>
+          <form onSubmit={submitAdd} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="mb-4 text-center text-lg font-bold text-slate-900">재료 추가</h3>
 
-            <label className="mb-1 block text-sm">재료 이름</label>
+            <label className="mb-1 block text-sm text-slate-700">재료 이름</label>
             <input
               required
               value={form.ingredientName}
               onChange={handleFormChange('ingredientName')}
-              className="mb-3 w-full rounded border px-2 py-1"
+              className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
             />
 
-            <label className="mb-1 block text-sm">보관 위치</label>
+            <label className="mb-1 block text-sm text-slate-700">보관 위치</label>
             <select
               value={form.location}
               onChange={handleFormChange('location')}
-              className="mb-3 w-full rounded border px-2 py-1"
+              className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
             >
               <option value="냉장고">냉장실</option>
               <option value="냉동실">냉동실</option>
               <option value="실온">실온</option>
             </select>
 
-            <label className="mb-1 block text-sm">소비기한</label>
+            <label className="mb-1 block text-sm text-slate-700">소비기한</label>
             <input
               type="date"
               value={form.due}
               onChange={handleFormChange('due')}
-              className="mb-3 w-full rounded border px-2 py-1"
+              className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
             />
 
-            <label className="mb-1 block text-sm">메모</label>
+            <label className="mb-1 block text-sm text-slate-700">메모</label>
             <input
               value={form.memo}
               onChange={handleFormChange('memo')}
-              className="mb-4 w-full rounded border px-2 py-1"
+              className="mb-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
             />
 
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setOpenAdd(false)}
-                className="rounded border px-3 py-1"
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
               >
                 취소
               </button>
-              <button type="submit" className="rounded bg-[#5f0080] px-3 py-1 text-white">
+              <button
+                type="submit"
+                className="rounded-lg bg-[#5f0080] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4a0064]"
+              >
                 추가
               </button>
             </div>
@@ -475,47 +522,51 @@ export default function Ingredients() {
         </div>
       )}
 
+      {/* 상세 모달 */}
       {openDetail && selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={handleUpdate} className="w-full max-w-md rounded-lg bg-white p-6">
+          <form
+            onSubmit={handleUpdate}
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+          >
             {/* ✅ 제목에 뱃지 추가 */}
             <div className="mb-4 flex items-center justify-center gap-2">
-              <h3 className="text-lg font-bold">재료 상세</h3>
+              <h3 className="text-lg font-bold text-slate-900">재료 상세</h3>
               <Badge daysLeft={selectedItem.daysLeft} />
             </div>
 
-            <label className="mb-1 block text-sm">재료 이름</label>
+            <label className="mb-1 block text-sm text-slate-700">재료 이름</label>
             <input
               required
               value={detailForm.ingredientName}
               onChange={handleDetailChange('ingredientName')}
-              className="mb-3 w-full rounded border px-2 py-1"
+              className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
             />
 
-            <label className="mb-1 block text-sm">보관 위치</label>
+            <label className="mb-1 block text-sm text-slate-700">보관 위치</label>
             <select
               value={detailForm.location}
               onChange={handleDetailChange('location')}
-              className="mb-3 w-full rounded border px-2 py-1"
+              className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
             >
               <option value="냉장고">냉장실</option>
               <option value="냉동실">냉동실</option>
               <option value="실온">실온</option>
             </select>
 
-            <label className="mb-1 block text-sm">소비기한</label>
+            <label className="mb-1 block text-sm text-slate-700">소비기한</label>
             <input
               type="date"
               value={detailForm.due}
               onChange={handleDetailChange('due')}
-              className="mb-3 w-full rounded border px-2 py-1"
+              className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
             />
 
-            <label className="mb-1 block text-sm">메모</label>
+            <label className="mb-1 block text-sm text-slate-700">메모</label>
             <input
               value={detailForm.memo}
               onChange={handleDetailChange('memo')}
-              className="mb-4 w-full rounded border px-2 py-1"
+              className="mb-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
             />
 
             <div className="flex justify-between">
@@ -525,7 +576,7 @@ export default function Ingredients() {
                   onClick={() => {
                     handleDelete(selectedItem.id, selectedItem.ingredientName);
                   }}
-                  className="rounded bg-red-500 px-3 py-1 text-white"
+                  className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
                 >
                   삭제
                 </button>
@@ -537,11 +588,14 @@ export default function Ingredients() {
                     setOpenDetail(false);
                     setSelectedItem(null);
                   }}
-                  className="rounded border px-3 py-1"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                 >
                   취소
                 </button>
-                <button type="submit" className="rounded bg-[#5f0080] px-3 py-1 text-white">
+                <button
+                  type="submit"
+                  className="rounded-lg bg-[#5f0080] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4a0064]"
+                >
                   수정
                 </button>
               </div>

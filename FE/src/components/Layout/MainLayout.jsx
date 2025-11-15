@@ -8,13 +8,15 @@ const MainLayout = ({ children, headerTitle, showBackButton = false, hideNavbar 
   const navItems = [
     { id: 'ingredients', icon: House, label: '내재료', path: '/ingredients' },
     { id: 'recipes', icon: BookOpen, label: '레시피', path: '/recipes' },
+
+    // 💜 강조 홈 탭 (가운데)
+    { id: 'main', icon: House, label: '홈', path: '/main', highlight: true },
+
     { id: 'group-buying', icon: ShoppingCart, label: '공동구매', path: '/group-buying' },
     { id: 'mypage', icon: User, label: '마이페이지', path: '/mypage' },
   ];
 
-  const isActive = (path) => {
-    return location.pathname.startsWith(path);
-  };
+  const isActive = (path) => location.pathname.startsWith(path);
 
   return (
     <div className="flex h-screen flex-col bg-[#F9F5FF]">
@@ -33,13 +35,12 @@ const MainLayout = ({ children, headerTitle, showBackButton = false, hideNavbar 
             </div>
           ) : (
             <h1
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/main')}
               className="cursor-pointer text-xl font-bold text-[#5f0080]"
             >
               {headerTitle || '식재료부'}
             </h1>
           )}
-          {/* 추가 헤더 아이템 (알림, 설정 등) */}
         </div>
       </header>
 
@@ -51,16 +52,41 @@ const MainLayout = ({ children, headerTitle, showBackButton = false, hideNavbar 
       {/* Bottom Navigation */}
       {!hideNavbar && (
         <nav className="fixed right-0 bottom-0 left-0 z-40 border-t border-[#e0e0e0] bg-white">
-          <div className="flex h-16 items-center justify-around">
+          <div className="relative flex h-16 items-center justify-around">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.path);
 
+              /** ⭐ 메인 강조 탭 */
+              if (item.highlight) {
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => navigate(item.path)}
+                    className="relative flex flex-col items-center justify-center"
+                  >
+                    <div
+                      className={`flex h-14 w-14 items-center justify-center rounded-full shadow-md transition ${active ? 'bg-[#5f0080]' : 'bg-[#C8A2FF]'} -translate-y-3`}
+                    >
+                      <Icon size={28} color="white" strokeWidth={2.5} />
+                    </div>
+                    <span
+                      className={`-mt-2 text-xs ${
+                        active ? 'font-semibold text-[#5f0080]' : 'text-gray-600'
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              }
+
+              /** ⭐ 일반 탭 */
               return (
                 <button
                   key={item.id}
                   onClick={() => navigate(item.path)}
-                  className="flex h-full flex-1 flex-col items-center justify-center transition-colors"
+                  className="flex h-full flex-1 flex-col items-center justify-center transition"
                 >
                   <Icon
                     size={24}

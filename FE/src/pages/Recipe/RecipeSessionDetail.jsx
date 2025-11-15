@@ -27,14 +27,27 @@ export default function RecipeSessionDetail() {
   return (
     <div className="mx-auto min-h-[100dvh] w-full max-w-full bg-[#F8F3FF] px-4 pt-3 pb-[88px] md:max-w-screen-md md:px-6 lg:max-w-4xl lg:px-8">
       {/* 상단: 방 제목만 표시 (편집/삭제 없음) */}
-      <h1 className="mb-3 text-lg font-bold break-words">{title}</h1>
+      <h1 className="mb-3 text-lg font-bold break-words text-slate-900">{title}</h1>
 
       {/* 건강/알레르기 안내문 */}
       {notice && (
-        <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+        <div className="mb-4 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs text-violet-800 md:text-sm">
           {notice}
         </div>
       )}
+
+      {/* 색상 레전드 */}
+      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl bg-white px-3 py-2 text-[11px] text-slate-500 shadow-sm">
+        <span className="font-semibold text-slate-700">표기 안내</span>
+        <div className="flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-[#6366F1]" />
+          <span>있는 재료만 사용하는 레시피</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-[#DC2626]" />
+          <span>추가 식재료가 필요한 레시피</span>
+        </div>
+      </div>
 
       {/* 있는 식재료로 만든 레시피 */}
       <SectionTitle>있는 식재료로 만든 레시피</SectionTitle>
@@ -49,7 +62,7 @@ export default function RecipeSessionDetail() {
       )}
 
       {/* 식재료가 필요한 레시피 */}
-      <SectionTitle>식재료가 필요한 레시피</SectionTitle>
+      <SectionTitle className="mt-8">식재료가 필요한 레시피</SectionTitle>
       {need.length === 0 ? (
         <Empty text="추가 식재료가 필요한 레시피가 없어요." />
       ) : (
