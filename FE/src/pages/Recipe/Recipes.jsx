@@ -8,6 +8,7 @@ import ErrorBox from '@/components/Recipe/ErrorBox';
 import IngredientRow from '@/components/Recipe/IngredientRow';
 import recipeApi from '@/api/recipeApi';
 import toast from 'react-hot-toast';
+import RecipeDeleteModal from '@/components/Recipe/RecipeDeleteModal';
 
 const Tab = { CREATE: 'CREATE', LIST: 'LIST' };
 const cx = (...xs) => xs.filter(Boolean).join(' ');
@@ -24,6 +25,9 @@ const STEP_INTERVAL_MS = 5_500;
 export default function Recipes() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
 
   // ▼ 최초 진입 시 기본 탭: sessionStorage → 기본값 CREATE
   const initialTab = useMemo(
@@ -296,6 +300,20 @@ export default function Recipes() {
     );
   };
 
+  const closeDeleteDialog = () => {
+    setShowDeleteDialog(false);
+    setDeleteTargetId(null);
+  };
+
+  const handleDelete = () => {
+    if (!deleteTargetId) return;
+    deleteSessionMutation.mutate(deleteTargetId, {
+      onSuccess: () => {
+        closeDeleteDialog();
+      },
+    });
+  };
+
   const selCount = selected.size;
 
   return (
@@ -545,13 +563,8 @@ export default function Recipes() {
                             className="block w-full px-3 py-2 text-left text-red-600 hover:bg-red-50"
                             onClick={() => {
                               setMenuOpenId(null);
-                              if (
-                                window.confirm(
-                                  '정말 이 레시피 방을 삭제할까요?\n삭제 후에는 되돌릴 수 없어요.',
-                                )
-                              ) {
-                                deleteSessionMutation.mutate(room.id);
-                              }
+                              setDeleteTargetId(room.id);
+                              setShowDeleteDialog(true);
                             }}
                           >
                             삭제하기
@@ -586,6 +599,20 @@ export default function Recipes() {
           </div>
         </div>
       )}
+
+      {/* 삭제 모달 */}
+      <RecipeDeleteModal
+        showDeleteDialog={showDeleteDialog}
+        setShowDeleteDialog={(open) => {
+          if (!open) {
+            closeDeleteDialog();
+          } else {
+            setShowDeleteDialog(true);
+          }
+        }}
+        handleDelete={handleDelete}
+        isPending={deleteSessionMutation.isPending}
+      />
     </div>
   );
 }
