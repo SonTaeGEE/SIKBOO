@@ -2,7 +2,7 @@ name: Deploy Spring Boot to OCI
 
 on:
   push:
-    branches: [main] # main 브랜치 push 시 자동 배포
+    branches: [main]
 
 jobs:
   deploy:
@@ -20,6 +20,7 @@ jobs:
 
       - name: Build JAR
         run: |
+          cd BE
           chmod +x ./gradlew
           ./gradlew clean bootJar
 
@@ -29,7 +30,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "build/libs/*.jar"
+          source: "BE/build/libs/*.jar"
           target: "/opt/sikboo/"
           overwrite: true
 
