@@ -65,4 +65,12 @@ public class MemberService {
             Arrays.asList(member.getAllergies())
         );
     }
+    /**
+     * 회원 탈퇴
+     */
+    @Transactional
+    public void deleteMember(Long memberId) {
+        memberRepo.deleteById(memberId);
+    }
+
 }

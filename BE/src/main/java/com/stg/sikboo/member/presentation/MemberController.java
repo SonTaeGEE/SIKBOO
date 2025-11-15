@@ -48,6 +48,16 @@ public class MemberController {
 		Long memberId = extractMemberId(jwt);
 		return memberService.updateProfile(memberId, request);
 	}
+	
+	/**
+	 * 회원 탈퇴
+	 */
+	@DeleteMapping("/members/me")
+	public void deleteMe(@AuthenticationPrincipal Jwt jwt) {
+	    Long memberId = extractMemberId(jwt);
+	    memberService.deleteMember(memberId);
+	}
+
 
 	private Long extractMemberId(Jwt jwt) {
 		Object claim = jwt.getClaim("memberId");
