@@ -1,3 +1,4 @@
+// src/routes/index.jsx
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { MainLayout } from '@/components/Layout';
 import Ingredients from '@/pages/Ingredient/Ingredients';
@@ -13,6 +14,8 @@ import Login from '@/pages/Auth/Login';
 import Signup from '@/pages/Auth/Signup';
 import OAuth2Success from '@/pages/Auth/OAuth2Success';
 import Onboarding from '@/pages/Auth/Onboarding';
+import MainPage from '@/pages/MainPage/MainPage'; // ✅ 메인페이지 추가
+import NotFound from '@/pages/Error/NotFound';
 
 const AppRoutes = () => {
   const location = useLocation();
@@ -53,6 +56,10 @@ const AppRoutes = () => {
     if (location.pathname.startsWith('/mypage')) {
       return { title: '마이페이지', showBack: false, hideNav: false };
     }
+    if (location.pathname.startsWith('/main')) {
+      // ✅ 메인 페이지 헤더 (로고 클릭 시도 /main 으로 가니까 맞춰줌)
+      return { title: '식재료를 부탁해', showBack: false, hideNav: false };
+    }
     return { title: '식재료부', showBack: false, hideNav: false };
   };
 
@@ -65,7 +72,7 @@ const AppRoutes = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/oauth2/success" element={<OAuth2Success />} />
-        <Route path="/onboarding" element={<Onboarding />} /> {/* ⬅️ 추가 */}
+        <Route path="/onboarding" element={<Onboarding />} />
       </Routes>
     );
   }
@@ -77,7 +84,12 @@ const AppRoutes = () => {
       hideNavbar={headerConfig.hideNav}
     >
       <Routes>
+        {/* 기본 루트는 그대로 로그인으로 리다이렉트 */}
         <Route path="/" element={<Navigate to="/login" replace />} />
+
+        {/* ✅ 메인 페이지 라우트 */}
+        <Route path="/main" element={<MainPage />} />
+
         <Route path="/ingredients" element={<Ingredients />} />
         <Route path="/recipes" element={<Recipes />} />
         <Route path="/recipes/sessions/:id" element={<RecipeSessionDetail />} />
@@ -87,6 +99,7 @@ const AppRoutes = () => {
         <Route path="/group-buying/create" element={<CreateGroupBuying />} />
         <Route path="/group-buying/edit/:id" element={<EditGroupBuying />} />
         <Route path="/mypage" element={<MyPage />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </MainLayout>
   );

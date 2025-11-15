@@ -1,13 +1,14 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import SectionTitle from '@/components/Recipe/SectionTitle';
+// ★ SectionTitle import 제거
 import Skeleton from '@/components/Recipe/Skeleton';
 import Empty from '@/components/Recipe/Empty';
 import ErrorBox from '@/components/Recipe/ErrorBox';
 import IngredientRow from '@/components/Recipe/IngredientRow';
 import recipeApi from '@/api/recipeApi';
 import toast from 'react-hot-toast';
+import RecipeDeleteModal from '@/components/Recipe/RecipeDeleteModal';
 
 const Tab = { CREATE: 'CREATE', LIST: 'LIST' };
 const cx = (...xs) => xs.filter(Boolean).join(' ');
@@ -24,6 +25,9 @@ const STEP_INTERVAL_MS = 5_500;
 export default function Recipes() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
 
   // ▼ 최초 진입 시 기본 탭: sessionStorage → 기본값 CREATE
   const initialTab = useMemo(
@@ -296,22 +300,38 @@ export default function Recipes() {
     );
   };
 
+  const closeDeleteDialog = () => {
+    setShowDeleteDialog(false);
+    setDeleteTargetId(null);
+  };
+
+  const handleDelete = () => {
+    if (!deleteTargetId) return;
+    deleteSessionMutation.mutate(deleteTargetId, {
+      onSuccess: () => {
+        closeDeleteDialog();
+        toast.success('레시피 삭제 완료');
+      },
+    });
+  };
+
   const selCount = selected.size;
 
   return (
     <div className="mx-auto min-h-[100dvh] w-full max-w-full bg-[#F8F3FF] pb-[88px] md:max-w-screen-md lg:max-w-4xl">
       {/* 헤더 + 탭 */}
       <div className="sticky top-0 z-10 bg-[#F8F3FF]/90 px-4 pt-3 pb-2 backdrop-blur md:px-6 lg:px-8">
-        <h1 className="text-center text-lg font-bold">레시피</h1>
-        <div className="mt-3 grid grid-cols-2 rounded-xl bg-slate-100 p-1 text-sm">
+        <div className="mt-3 grid grid-cols-2 rounded-full bg-violet-50 p-1 text-sm">
           <button
             onClick={() => {
               sessionStorage.setItem('recipes.defaultTab', Tab.CREATE);
               setTab(Tab.CREATE);
             }}
             className={cx(
-              'rounded-lg py-2',
-              tab === Tab.CREATE ? 'bg-white font-semibold shadow' : 'text-slate-500',
+              'rounded-full py-2 text-sm transition',
+              tab === Tab.CREATE
+                ? 'bg-white font-semibold text-violet-700 shadow-sm'
+                : 'text-slate-500',
             )}
           >
             생성
@@ -322,8 +342,10 @@ export default function Recipes() {
               setTab(Tab.LIST);
             }}
             className={cx(
-              'rounded-lg py-2',
-              tab === Tab.LIST ? 'bg-white font-semibold shadow' : 'text-slate-500',
+              'rounded-full py-2 text-sm transition',
+              tab === Tab.LIST
+                ? 'bg-white font-semibold text-violet-700 shadow-sm'
+                : 'text-slate-500',
             )}
           >
             목록
@@ -342,18 +364,20 @@ export default function Recipes() {
                 value={ingredientKeyword}
                 onChange={(e) => setIngredientKeyword(e.target.value)}
                 placeholder="재료 이름 검색"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+                className="w-full rounded-full border border-slate-200 bg-white px-4 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
               />
             </div>
 
-            {my.isLoading && <div className="py-10 text-center text-slate-500">불러오는 중…</div>}
+            {my.isLoading && (
+              <div className="py-10 text-center text-sm text-slate-500">불러오는 중…</div>
+            )}
             {my.isError && <ErrorBox error={my.error} />}
             {!my.isLoading &&
               !my.isError &&
               (filteredIngredients.length === 0 ? (
                 <Empty text="조건에 맞는 재료가 없어요." />
               ) : (
-                <ul className="divide-y">
+                <ul className="divide-y divide-slate-100 rounded-2xl bg-white px-4">
                   {filteredIngredients.map((it) => (
                     <IngredientRow
                       key={it.id}
@@ -367,8 +391,6 @@ export default function Recipes() {
           </>
         ) : (
           <>
-            <SectionTitle>내가 만든 레시피 방</SectionTitle>
-
             {/* 레시피 방 검색 */}
             <div className="mb-3">
               <input
@@ -376,7 +398,7 @@ export default function Recipes() {
                 value={sessionKeyword}
                 onChange={(e) => setSessionKeyword(e.target.value)}
                 placeholder="레시피 방 제목 검색"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+                className="w-full rounded-full border border-slate-200 bg-white px-4 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
               />
             </div>
 
@@ -387,7 +409,7 @@ export default function Recipes() {
             ) : filteredSessions.length === 0 ? (
               <Empty text="조건에 맞는 레시피 방이 없어요." />
             ) : (
-              <div className="mb-10 space-y-2">
+              <div className="mb-10 space-y-3">
                 {filteredSessions.map((room) => {
                   const isCurrentGeneratingRoom =
                     waitingSessionId != null && room.id === waitingSessionId && generatingVisible;
@@ -404,7 +426,7 @@ export default function Recipes() {
                       key={room.id}
                       className={cx(
                         'relative w-full transition-transform duration-150',
-                        isDragging && 'scale-[1.01] shadow-lg ring-2 ring-indigo-200',
+                        isDragging && 'scale-[1.01] shadow-lg ring-2 ring-violet-200',
                       )}
                       onDragEnter={() => handleDragEnter(room.id)}
                       onDragOver={(e) => e.preventDefault()}
@@ -418,10 +440,10 @@ export default function Recipes() {
                           navigate(`/recipes/sessions/${room.id}`);
                         }}
                         className={cx(
-                          'flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition',
+                          'flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition',
                           isCurrentGeneratingRoom
                             ? 'cursor-not-allowed bg-gradient-to-r from-emerald-100 via-emerald-50 to-emerald-100 opacity-95'
-                            : 'bg-white hover:bg-indigo-50',
+                            : 'bg-white hover:bg-violet-50',
                         )}
                       >
                         {/* 드래그 핸들 (석 삼 모양) */}
@@ -463,7 +485,7 @@ export default function Recipes() {
                                         submitTitleChange(room);
                                       }
                                     }}
-                                    className="max-h-20 min-h-[36px] flex-1 resize-none rounded-md border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+                                    className="max-h-20 min-h-[36px] flex-1 resize-none rounded-md border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
                                   />
                                   <button
                                     type="button"
@@ -471,7 +493,7 @@ export default function Recipes() {
                                       e.stopPropagation();
                                       submitTitleChange(room);
                                     }}
-                                    className="shrink-0 rounded-md bg-indigo-500 px-3 py-1 text-xs font-semibold text-white"
+                                    className="shrink-0 rounded-md bg-violet-500 px-3 py-1 text-xs font-semibold text-white"
                                   >
                                     확인
                                   </button>
@@ -479,8 +501,8 @@ export default function Recipes() {
                               ) : (
                                 <span
                                   className={cx(
-                                    'truncate font-semibold',
-                                    isCurrentGeneratingRoom && 'animate-pulse text-black',
+                                    'truncate text-sm font-semibold text-slate-900',
+                                    isCurrentGeneratingRoom && 'animate-pulse',
                                   )}
                                 >
                                   {isCurrentGeneratingRoom ? '레시피 생성중…' : room.title}
@@ -488,7 +510,7 @@ export default function Recipes() {
                               )}
                             </div>
 
-                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <div className="flex items-center gap-2 text-[11px] text-slate-500">
                               {/* 옵션 메뉴(점 3개) */}
                               <button
                                 type="button"
@@ -545,13 +567,8 @@ export default function Recipes() {
                             className="block w-full px-3 py-2 text-left text-red-600 hover:bg-red-50"
                             onClick={() => {
                               setMenuOpenId(null);
-                              if (
-                                window.confirm(
-                                  '정말 이 레시피 방을 삭제할까요?\n삭제 후에는 되돌릴 수 없어요.',
-                                )
-                              ) {
-                                deleteSessionMutation.mutate(room.id);
-                              }
+                              setDeleteTargetId(room.id);
+                              setShowDeleteDialog(true);
                             }}
                           >
                             삭제하기
@@ -574,11 +591,11 @@ export default function Recipes() {
             <button
               onClick={() => gen.mutate()}
               disabled={gen.isPending || generatingVisible || selCount === 0}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-4 text-white shadow-lg disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-500 to-fuchsia-500 py-4 text-sm font-semibold text-white shadow-lg disabled:opacity-60"
             >
               레시피 생성
               {selCount > 0 && (
-                <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs">
+                <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[11px]">
                   {selCount}
                 </span>
               )}
@@ -586,6 +603,20 @@ export default function Recipes() {
           </div>
         </div>
       )}
+
+      {/* 삭제 모달 */}
+      <RecipeDeleteModal
+        showDeleteDialog={showDeleteDialog}
+        setShowDeleteDialog={(open) => {
+          if (!open) {
+            closeDeleteDialog();
+          } else {
+            setShowDeleteDialog(true);
+          }
+        }}
+        handleDelete={handleDelete}
+        isPending={deleteSessionMutation.isPending}
+      />
     </div>
   );
 }
