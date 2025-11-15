@@ -15,6 +15,7 @@ import Signup from '@/pages/Auth/Signup';
 import OAuth2Success from '@/pages/Auth/OAuth2Success';
 import Onboarding from '@/pages/Auth/Onboarding';
 import MainPage from '@/pages/MainPage/MainPage'; // ✅ 메인페이지 추가
+import NotFound from '@/pages/Error/NotFound';
 
 const AppRoutes = () => {
   const location = useLocation();
@@ -98,6 +99,7 @@ const AppRoutes = () => {
         <Route path="/group-buying/create" element={<CreateGroupBuying />} />
         <Route path="/group-buying/edit/:id" element={<EditGroupBuying />} />
         <Route path="/mypage" element={<MyPage />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </MainLayout>
   );

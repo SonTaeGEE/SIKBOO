@@ -2,15 +2,11 @@ import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from '@tansta
 import {
   createGroupBuying,
   getGroupBuying,
-  getAllGroupBuyings,
-  getActiveGroupBuyings,
   getGroupBuyingsByCategory,
-  getMyGroupBuyings,
   updateGroupBuying,
   deleteGroupBuying,
   joinGroupBuying,
   leaveGroupBuying,
-  getMyParticipatingGroupBuyings,
   checkParticipation,
   getParticipantsByGroupBuying,
   searchGroupBuyings,
@@ -20,13 +16,10 @@ import {
 // Query Keys
 export const groupBuyingKeys = {
   all: ['groupBuyings'],
-  lists: () => [...groupBuyingKeys.all, 'list'],
-  list: (filters) => [...groupBuyingKeys.lists(), filters],
   details: () => [...groupBuyingKeys.all, 'detail'],
   detail: (id) => [...groupBuyingKeys.details(), id],
-  active: () => [...groupBuyingKeys.all, 'active'],
   category: (category) => [...groupBuyingKeys.all, 'category', category],
-  my: (memberId) => [...groupBuyingKeys.all, 'my', memberId],
+  infinite: (filters = {}) => [...groupBuyingKeys.all, 'infinite', filters],
   participating: (memberId) => [...groupBuyingKeys.all, 'participating', memberId],
   participation: (groupBuyingId, memberId) => [
     ...groupBuyingKeys.all,
@@ -35,6 +28,12 @@ export const groupBuyingKeys = {
     memberId,
   ],
   participants: (groupBuyingId) => [...groupBuyingKeys.all, 'participants', groupBuyingId],
+  myParticipating: (filters = {}) => [
+    ...groupBuyingKeys.all,
+    'myParticipating',
+    'infinite',
+    filters,
+  ],
 };
 
 /**
@@ -46,9 +45,7 @@ export const useCreateGroupBuying = () => {
   return useMutation({
     mutationFn: createGroupBuying,
     onSuccess: () => {
-      // 목록 쿼리 무효화 (새로고침)
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.active() });
+      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.all });
     },
   });
 };
@@ -65,27 +62,6 @@ export const useGroupBuying = (id) => {
 };
 
 /**
- * 전체 공동구매 목록 조회 Query
- */
-export const useAllGroupBuyings = () => {
-  return useQuery({
-    queryKey: groupBuyingKeys.lists(),
-    queryFn: getAllGroupBuyings,
-  });
-};
-
-/**
- * 모집중인 공동구매 목록 조회 Query
- */
-export const useActiveGroupBuyings = (options = {}) => {
-  return useQuery({
-    queryKey: groupBuyingKeys.active(),
-    queryFn: getActiveGroupBuyings,
-    ...options,
-  });
-};
-
-/**
  * 카테고리별 공동구매 목록 조회 Query
  */
 export const useGroupBuyingsByCategory = (category) => {
@@ -97,17 +73,6 @@ export const useGroupBuyingsByCategory = (category) => {
 };
 
 /**
- * 내가 만든 공동구매 목록 조회 Query
- */
-export const useMyGroupBuyings = (memberId) => {
-  return useQuery({
-    queryKey: groupBuyingKeys.my(memberId),
-    queryFn: () => getMyGroupBuyings(memberId),
-    enabled: !!memberId,
-  });
-};
-
-/**
  * 공동구매 수정 Mutation
  */
 export const useUpdateGroupBuying = () => {
@@ -115,11 +80,8 @@ export const useUpdateGroupBuying = () => {
 
   return useMutation({
     mutationFn: updateGroupBuying,
-    onSuccess: (data, variables) => {
-      // 해당 공동구매 상세 쿼리 무효화
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.detail(variables.id) });
-      // 목록 쿼리 무효화
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.lists() });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.all });
     },
   });
 };
@@ -132,10 +94,10 @@ export const useDeleteGroupBuying = () => {
 
   return useMutation({
     mutationFn: deleteGroupBuying,
-    onSuccess: () => {
-      // 목록 쿼리 무효화
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.active() });
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.all });
+      // 삭제된 상세 쿼리 제거
+      queryClient.removeQueries({ queryKey: groupBuyingKeys.detail(variables) });
     },
   });
 };
@@ -148,18 +110,8 @@ export const useJoinGroupBuying = () => {
 
   return useMutation({
     mutationFn: joinGroupBuying,
-    onSuccess: (data, variables) => {
-      // 해당 공동구매 상세 쿼리 무효화
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.detail(variables.id) });
-      // 목록 쿼리 무효화
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.active() });
-      // 참여자 목록 무효화
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.participants(variables.id) });
-      // 참여 여부 무효화
-      queryClient.invalidateQueries({
-        queryKey: groupBuyingKeys.participation(variables.id, variables.memberId),
-      });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.all });
     },
   });
 };
@@ -172,31 +124,9 @@ export const useLeaveGroupBuying = () => {
 
   return useMutation({
     mutationFn: leaveGroupBuying,
-    onSuccess: (data, variables) => {
-      // 해당 공동구매 상세 쿼리 무효화
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.detail(variables.id) });
-      // 목록 쿼리 무효화
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.active() });
-      // 참여자 목록 무효화
-      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.participants(variables.id) });
-      // 참여 여부 무효화
-      queryClient.invalidateQueries({
-        queryKey: groupBuyingKeys.participation(variables.id, variables.memberId),
-      });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: groupBuyingKeys.all });
     },
-  });
-};
-
-/**
- * 내가 참여한 공동구매 목록 조회 Query
- */
-export const useMyParticipatingGroupBuyings = (memberId, options = {}) => {
-  return useQuery({
-    queryKey: groupBuyingKeys.participating(memberId),
-    queryFn: () => getMyParticipatingGroupBuyings(memberId),
-    enabled: !!memberId,
-    ...options,
   });
 };
 
@@ -237,7 +167,7 @@ export const useInfiniteGroupBuyings = (filters = {}) => {
   const { search, category, status = 'RECRUITING', lat, lng, distance, pageSize = 20 } = filters;
 
   return useInfiniteQuery({
-    queryKey: ['groupBuyings', 'infinite', { search, category, status, lat, lng, distance }],
+    queryKey: groupBuyingKeys.infinite(filters),
     queryFn: ({ pageParam = 0 }) =>
       searchGroupBuyings({
         search,
@@ -277,7 +207,7 @@ export const useInfiniteMyParticipatingGroupBuyings = (filters = {}) => {
   const { memberId, search, category, pageSize = 20 } = filters;
 
   return useInfiniteQuery({
-    queryKey: ['myParticipating', 'infinite', { memberId, search, category }],
+    queryKey: groupBuyingKeys.myParticipating(filters),
     queryFn: ({ pageParam = 0 }) =>
       searchMyParticipatingGroupBuyings({
         memberId,
