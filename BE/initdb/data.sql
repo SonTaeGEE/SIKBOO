@@ -84,12 +84,14 @@ CREATE TABLE recipe (
     member_id BIGINT NOT NULL,
     recipe_name   VARCHAR(100)  NOT NULL,
     recipe_detail VARCHAR(1000) NOT NULL,
+    display_order BIGINT NOT NULL,  -- 11.14 신규 추가
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_recipe_member FOREIGN KEY (member_id)
         REFERENCES member(member_id) ON DELETE CASCADE
 );
 
 COMMENT ON TABLE recipe IS '레시피 정보';
+COMMENT ON COLUMN recipe.display_order IS '회원별 레시피 정렬 순서(1=최신)';
 
 -- ============================================
 -- 4. 공동구매 (GroupBuying)
@@ -101,7 +103,7 @@ CREATE TABLE groupbuying (
     title VARCHAR(255) NOT NULL,
     total_price INTEGER NOT NULL,
     max_people INTEGER NOT NULL,
-    info VARCHAR(1000),
+    info TEXT,
     current_people INTEGER NOT NULL DEFAULT 1,
     pickup_location VARCHAR(255) NOT NULL,
     pickup_latitude  NUMERIC(10, 8) NOT NULL,
@@ -110,7 +112,7 @@ CREATE TABLE groupbuying (
     deadline TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(50) NOT NULL DEFAULT '모집중',
+    status VARCHAR(50) NOT NULL DEFAULT 'RECRUITING',
     CONSTRAINT fk_groupbuying_member FOREIGN KEY (member_id)
         REFERENCES member(member_id) ON DELETE CASCADE,
     CONSTRAINT chk_people CHECK (current_people <= max_people)
@@ -198,10 +200,10 @@ CREATE OR REPLACE FUNCTION auto_close_expired_groupbuying()
 RETURNS void AS $$
 BEGIN
   UPDATE groupbuying
-  SET status = '마감',
+  SET status = 'DEADLINE',
       updated_at = CURRENT_TIMESTAMP
   WHERE deadline < CURRENT_TIMESTAMP
-    AND status = '모집중';
+    AND status = 'RECRUITING';
 END;
 $$ LANGUAGE plpgsql;
 
@@ -212,7 +214,8 @@ CREATE TABLE chat_message (
     message_id BIGSERIAL PRIMARY KEY,
     groupbuying_id BIGINT NOT NULL,
     member_id BIGINT NOT NULL,
-    message VARCHAR(1000) NOT NULL,
+    message TEXT NOT NULL,
+    member_name VARCHAR(50) NOT NULL DEFAULT '알 수 없음',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_chatmessage_groupbuying FOREIGN KEY (groupbuying_id)
         REFERENCES groupbuying(groupbuying_id) ON DELETE CASCADE,

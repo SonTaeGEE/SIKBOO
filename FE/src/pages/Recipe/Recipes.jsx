@@ -144,33 +144,50 @@ export default function Recipes() {
     refetchOnWindowFocus: true,
   });
 
-  // ★ 상세 데이터가 준비되었는지 판별 (have/need 중 하나라도 채워지면 완료로 간주)
+  // ★ 상세 데이터가 준비되었는지 판별 (status 또는 데이터 유무 기준)
   useEffect(() => {
     if (!waitingSessionId) return;
-    if (waitDetail.isSuccess) {
-      const d = waitDetail.data || {};
-      const ready =
-        (Array.isArray(d.have) && d.have.length > 0) ||
-        (Array.isArray(d.need) && d.need.length > 0);
+    if (!waitDetail.isSuccess) return;
 
-      if (ready) {
-        // 완료 시에는 10/10 로 세팅
-        setProgressStep(10);
-        sessionStorage.setItem('recipes.progressStep', '10');
+    const d = waitDetail.data || {};
 
-        // 목록 새로고침
-        qc.invalidateQueries({ queryKey: qKeys.sessions });
-        sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
-        setTab(Tab.LIST);
+    // 백엔드가 어떤 이름을 쓰든 최대한 맞춰보자 (status 또는 state)
+    const statusRaw = (d.status || d.state || '').toString().toUpperCase();
 
-        // 진행 상태 종료
-        setWaitingSessionId(null);
-        setIsGeneratingPersist(false);
-        sessionStorage.removeItem('recipes.waitingSessionId');
-        sessionStorage.removeItem('recipes.progressStartedAt');
-        sessionStorage.removeItem('recipes.progressStep');
-        sessionStorage.removeItem('recipes.isGenerating');
-      }
+    const isDoneStatus = ['COMPLETED', 'DONE', 'SUCCESS', 'FINISHED'].includes(statusRaw);
+    const isFailedStatus = ['FAILED', 'ERROR', 'CANCELED', 'CANCELLED', 'TIMEOUT'].includes(
+      statusRaw,
+    );
+
+    // 예전 방식: have / need 배열에 뭔가 들어오면 완료로 간주
+    const hasAnyRecipes =
+      (Array.isArray(d.have) && d.have.length > 0) || (Array.isArray(d.need) && d.need.length > 0);
+
+    // 아직 아무 상태도 아니고, 데이터도 비어 있으면 → 계속 대기
+    if (!isDoneStatus && !isFailedStatus && !hasAnyRecipes) {
+      return;
+    }
+
+    // 여기까지 왔으면 "끝난 상태"라고 본다 (성공이든 실패든)
+    setProgressStep(10);
+    sessionStorage.setItem('recipes.progressStep', '10');
+
+    // 목록 새로고침 & 탭 LIST로 이동
+    qc.invalidateQueries({ queryKey: qKeys.sessions });
+    sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
+    setTab(Tab.LIST);
+
+    // 진행 상태 종료 + sessionStorage 정리
+    setWaitingSessionId(null);
+    setIsGeneratingPersist(false);
+    sessionStorage.removeItem('recipes.waitingSessionId');
+    sessionStorage.removeItem('recipes.progressStartedAt');
+    sessionStorage.removeItem('recipes.progressStep');
+    sessionStorage.removeItem('recipes.isGenerating');
+
+    // 실패 상태라면 토스트로 알려주기
+    if (isFailedStatus && !hasAnyRecipes) {
+      toast.error(d.errorMessage || '레시피 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
     }
   }, [waitingSessionId, waitDetail.isSuccess, waitDetail.data, qc]);
 

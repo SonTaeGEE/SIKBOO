@@ -7,6 +7,7 @@ import {
 } from '@/api/ingredientApi';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useQueryClient } from '@tanstack/react-query'; // ✅ 추가
 
 const LOCATION_TABS = [
   { key: null, label: '전체' },
@@ -53,6 +54,8 @@ const Badge = ({ daysLeft }) => {
 
 export default function Ingredients() {
   const nav = useNavigate();
+  const qc = useQueryClient(); // ✅ React Query 클라이언트
+
   const [location, setLocation] = useState(null);
   const [q, setQ] = useState('');
   const [items, setItems] = useState([]);
@@ -113,6 +116,10 @@ export default function Ingredients() {
     if (!confirm(`${name} 을(를) 삭제하시겠습니까?`)) return;
     try {
       await deleteIngredient(id);
+
+      // ✅ 레시피 생성 탭의 "내 재료" 쿼리 무효화
+      qc.invalidateQueries({ queryKey: ['ingredients', 'mine'] });
+
       fetchList(currentPage);
       if (selectedItem?.id === id) {
         setOpenDetail(false);
@@ -144,6 +151,10 @@ export default function Ingredients() {
       await createIngredient(payload);
       setOpenAdd(false);
       setForm({ ingredientName: '', location: '냉장고', due: '', memo: '' });
+
+      // ✅ 생성 후에도 캐시 무효화
+      qc.invalidateQueries({ queryKey: ['ingredients', 'mine'] });
+
       fetchList(0);
     } catch (err) {
       console.error(err);
@@ -181,6 +192,10 @@ export default function Ingredients() {
       await updateIngredient(selectedItem.id, payload);
       setOpenDetail(false);
       setSelectedItem(null);
+
+      // ✅ 수정 후에도 캐시 무효화
+      qc.invalidateQueries({ queryKey: ['ingredients', 'mine'] });
+
       fetchList(currentPage);
     } catch (err) {
       console.error(err);
@@ -339,7 +354,7 @@ export default function Ingredients() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 text-xs text-[#888]">
+                      <div className="items센터 flex gap-2 text-xs text-[#888]">
                         <span>{formatDateIsoToYMD(it.due)} 까지</span>
                         {it.memo && (
                           <div className="inline-flex items-center gap-1">
