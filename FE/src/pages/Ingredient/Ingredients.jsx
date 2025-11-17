@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
-  listIngredients,
-  deleteIngredient,
-  createIngredient,
-  updateIngredient,
-} from '@/api/ingredientApi';
+  useIngredients,
+  useDeleteIngredient,
+  useCreateIngredient,
+  useUpdateIngredient,
+  ingredientKeys,
+} from '@/hooks/useIngredient';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { useQueryClient } from '@tanstack/react-query'; // ✅ 추가
+import { useQueryClient } from '@tanstack/react-query';
 
 const LOCATION_TABS = [
   { key: null, label: '전체' },
@@ -54,17 +55,36 @@ const Badge = ({ daysLeft }) => {
 
 export default function Ingredients() {
   const nav = useNavigate();
-  const qc = useQueryClient(); // ✅ React Query 클라이언트
+  const qc = useQueryClient();
 
   const [location, setLocation] = useState(null);
   const [q, setQ] = useState('');
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-
   const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalElements, setTotalElements] = useState(0);
   const pageSize = 10;
+
+  // React Query hooks
+  const { data, isLoading, error, refetch } = useIngredients(
+    {
+      location,
+      q: q || null,
+      page: currentPage,
+      size: pageSize,
+    },
+    {
+      onError: (err) => {
+        console.error(err);
+        nav('/login', { replace: true });
+      },
+    },
+  );
+
+  const deleteMutation = useDeleteIngredient();
+  const createMutation = useCreateIngredient();
+  const updateMutation = useUpdateIngredient();
+
+  const items = data?.content || [];
+  const totalPages = data?.totalPages || 0;
+  const totalElements = data?.totalElements || 0;
 
   const [openAdd, setOpenAdd] = useState(false);
   const [form, setForm] = useState({
@@ -83,59 +103,33 @@ export default function Ingredients() {
     memo: '',
   });
 
-  const fetchList = async (page = 0) => {
-    setLoading(true);
-    setCurrentPage(page);
-
-    try {
-      const result = await listIngredients({
-        location,
-        q: q || null,
-        page,
-        size: pageSize,
-      });
-
-      setItems(result.content || []);
-      setCurrentPage(result.number ?? page);
-      setTotalPages(result.totalPages || 0);
-      setTotalElements(result.totalElements || 0);
-    } catch (e) {
-      console.error(e);
-      nav('/login', { replace: true });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // location 변경 시 페이지 초기화
   useEffect(() => {
-    fetchList(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setCurrentPage(0);
   }, [location]);
 
-  const handleDelete = async (id, name) => {
+  const handleDelete = (id, name) => {
     if (!confirm(`${name} 을(를) 삭제하시겠습니까?`)) return;
-    try {
-      await deleteIngredient(id);
 
-      // ✅ 레시피 생성 탭의 "내 재료" 쿼리 무효화
-      qc.invalidateQueries({ queryKey: ['ingredients', 'mine'] });
-
-      fetchList(currentPage);
-      if (selectedItem?.id === id) {
-        setOpenDetail(false);
-        setSelectedItem(null);
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error('삭제 중 오류가 발생했습니다.');
-    }
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        if (selectedItem?.id === id) {
+          setOpenDetail(false);
+          setSelectedItem(null);
+        }
+      },
+      onError: (e) => {
+        console.error(e);
+        toast.error('삭제 중 오류가 발생했습니다.');
+      },
+    });
   };
 
   const handleAddClick = () => setOpenAdd(true);
 
   const handleFormChange = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const submitAdd = async (e) => {
+  const submitAdd = (e) => {
     e.preventDefault();
     if (!form.ingredientName?.trim()) {
       toast.error('재료 이름을 입력하세요');
@@ -147,19 +141,18 @@ export default function Ingredients() {
       due: form.due || undefined,
       memo: form.memo || undefined,
     };
-    try {
-      await createIngredient(payload);
-      setOpenAdd(false);
-      setForm({ ingredientName: '', location: '냉장고', due: '', memo: '' });
 
-      // ✅ 생성 후에도 캐시 무효화
-      qc.invalidateQueries({ queryKey: ['ingredients', 'mine'] });
-
-      fetchList(0);
-    } catch (err) {
-      console.error(err);
-      toast.error('재료 추가 중 오류가 발생했습니다.');
-    }
+    createMutation.mutate(payload, {
+      onSuccess: () => {
+        setOpenAdd(false);
+        setForm({ ingredientName: '', location: '냉장고', due: '', memo: '' });
+        setCurrentPage(0);
+      },
+      onError: (err) => {
+        console.error(err);
+        toast.error('재료 추가 중 오류가 발생했습니다.');
+      },
+    });
   };
 
   const openDetailModal = (item) => {
@@ -175,7 +168,7 @@ export default function Ingredients() {
 
   const handleDetailChange = (k) => (e) => setDetailForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const handleUpdate = async (e) => {
+  const handleUpdate = (e) => {
     e.preventDefault();
     if (!selectedItem) return;
     if (!detailForm.ingredientName?.trim()) {
@@ -188,24 +181,25 @@ export default function Ingredients() {
       due: detailForm.due || undefined,
       memo: detailForm.memo || undefined,
     };
-    try {
-      await updateIngredient(selectedItem.id, payload);
-      setOpenDetail(false);
-      setSelectedItem(null);
 
-      // ✅ 수정 후에도 캐시 무효화
-      qc.invalidateQueries({ queryKey: ['ingredients', 'mine'] });
-
-      fetchList(currentPage);
-    } catch (err) {
-      console.error(err);
-      toast.error('수정 중 오류가 발생했습니다.');
-    }
+    updateMutation.mutate(
+      { id: selectedItem.id, body: payload },
+      {
+        onSuccess: () => {
+          setOpenDetail(false);
+          setSelectedItem(null);
+        },
+        onError: (err) => {
+          console.error(err);
+          toast.error('수정 중 오류가 발생했습니다.');
+        },
+      },
+    );
   };
 
   const handlePageChange = (newPage) => {
     if (newPage < 0 || newPage >= totalPages) return;
-    fetchList(newPage);
+    setCurrentPage(newPage);
   };
 
   return (
@@ -239,7 +233,7 @@ export default function Ingredients() {
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    fetchList(0);
+                    setCurrentPage(0);
                   }
                 }}
                 placeholder="재료 이름 검색"
@@ -247,22 +241,9 @@ export default function Ingredients() {
               />
               {q && (
                 <button
-                  onClick={async () => {
+                  onClick={() => {
                     setQ('');
-                    try {
-                      const result = await listIngredients({
-                        location,
-                        q: null,
-                        page: 0,
-                        size: pageSize,
-                      });
-                      setItems(result.content || []);
-                      setCurrentPage(result.number || 0);
-                      setTotalPages(result.totalPages || 0);
-                      setTotalElements(result.totalElements || 0);
-                    } catch (e) {
-                      console.error(e);
-                    }
+                    setCurrentPage(0);
                   }}
                   className="absolute top-1/2 right-2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   type="button"
@@ -282,7 +263,7 @@ export default function Ingredients() {
               )}
             </div>
             <button
-              onClick={() => fetchList(0)}
+              onClick={() => setCurrentPage(0)}
               className="flex-shrink-0 rounded-full bg-[#5f0080] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#4a0064]"
               type="button"
             >
@@ -300,7 +281,7 @@ export default function Ingredients() {
 
         {/* 리스트 카드 */}
         <div className="rounded-2xl bg-white p-4 shadow-md">
-          {loading ? (
+          {isLoading ? (
             <div className="flex items-center justify-center py-10 text-sm text-slate-500">
               <svg
                 className="mr-2 h-5 w-5 animate-spin text-violet-500"

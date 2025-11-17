@@ -1,30 +1,32 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-// ★ SectionTitle import 제거
+import { useQueryClient } from '@tanstack/react-query';
 import Skeleton from '@/components/Recipe/Skeleton';
 import Empty from '@/components/Recipe/Empty';
 import ErrorBox from '@/components/Recipe/ErrorBox';
 import IngredientRow from '@/components/Recipe/IngredientRow';
-import recipeApi from '@/api/recipeApi';
 import toast from 'react-hot-toast';
 import RecipeDeleteModal from '@/components/Recipe/RecipeDeleteModal';
+import {
+  recipeKeys,
+  useMyIngredients,
+  useRecipeSessions,
+  useRecipeSessionDetail,
+  useGenerateRecipes,
+  useUpdateSessionTitle,
+  useDeleteSession,
+  useReorderSessions,
+} from '@/hooks/useRecipe';
 
 const Tab = { CREATE: 'CREATE', LIST: 'LIST' };
 const cx = (...xs) => xs.filter(Boolean).join(' ');
-
-const qKeys = {
-  myIngredients: ['ingredients', 'mine'],
-  sessions: ['recipes', 'sessions'],
-  sessionDetail: (id) => ['recipes', 'session', id],
-};
 
 // 55초를 10등분(각 단계 약 5.5초)
 const STEP_INTERVAL_MS = 5_500;
 
 export default function Recipes() {
   const navigate = useNavigate();
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
@@ -71,11 +73,7 @@ export default function Recipes() {
   const progressPercent = Math.min(progressStep * 10, 100);
 
   // 내 재료
-  const my = useQuery({
-    queryKey: qKeys.myIngredients,
-    queryFn: recipeApi.fetchMyIngredients,
-    enabled: tab === Tab.CREATE,
-  });
+  const my = useMyIngredients(tab === Tab.CREATE);
 
   // 재료 검색 필터
   const filteredIngredients = useMemo(() => {
@@ -93,9 +91,11 @@ export default function Recipes() {
     });
 
   // 레시피 생성(세션 생성)
-  const gen = useMutation({
-    mutationFn: () => recipeApi.generateRecipes(Array.from(selected)),
-    onMutate: () => {
+  const genMutation = useGenerateRecipes();
+  
+  const gen = {
+    ...genMutation,
+    mutate: () => {
       // 진행률 관련 상태 및 저장값 초기화
       setProgressStep(0);
       setIsGeneratingPersist(false);
@@ -103,43 +103,40 @@ export default function Recipes() {
       sessionStorage.removeItem('recipes.progressStep');
       sessionStorage.removeItem('recipes.waitingSessionId');
       sessionStorage.removeItem('recipes.isGenerating');
+      
+      genMutation.mutate(Array.from(selected), {
+        onSuccess: (created) => {
+          // 선택 초기화
+          setSelected(new Set());
+
+          const newId = created?.id ?? null;
+          if (newId) {
+            const now = Date.now();
+
+            setWaitingSessionId(newId);
+            setIsGeneratingPersist(true);
+
+            sessionStorage.setItem('recipes.waitingSessionId', String(newId));
+            sessionStorage.setItem('recipes.progressStartedAt', String(now));
+            sessionStorage.setItem('recipes.progressStep', '1');
+            sessionStorage.setItem('recipes.isGenerating', 'true');
+
+            setProgressStep(1);
+          }
+
+          // 생성 탭 → 바로 목록 탭으로 이동
+          sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
+          setTab(Tab.LIST);
+        },
+      });
     },
-    onSuccess: (created) => {
-      // 선택 초기화
-      setSelected(new Set());
-
-      const newId = created?.id ?? null;
-      if (newId) {
-        const now = Date.now();
-
-        setWaitingSessionId(newId);
-        setIsGeneratingPersist(true);
-
-        sessionStorage.setItem('recipes.waitingSessionId', String(newId));
-        sessionStorage.setItem('recipes.progressStartedAt', String(now));
-        sessionStorage.setItem('recipes.progressStep', '1');
-        sessionStorage.setItem('recipes.isGenerating', 'true');
-
-        setProgressStep(1);
-      }
-
-      // 생성 탭 → 바로 목록 탭으로 이동
-      sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
-      setTab(Tab.LIST);
-
-      // 새 방이 바로 목록에 보이도록 세션 목록 리패치
-      qc.invalidateQueries({ queryKey: qKeys.sessions });
-    },
-  });
+  };
 
   // 생성/대기 중인지 전역 플래그
   const generatingVisible = gen.isPending || isGeneratingPersist || !!waitingSessionId;
 
   // ★ 생성 완료 대기: waitingSessionId가 있으면 상세를 폴링
-  const waitDetail = useQuery({
-    queryKey: waitingSessionId ? qKeys.sessionDetail(waitingSessionId) : ['noop'],
-    queryFn: () => recipeApi.getSessionDetail(waitingSessionId),
-    enabled: !!waitingSessionId,
+  const waitDetail = useRecipeSessionDetail(waitingSessionId, {
     refetchInterval: 1200, // 1.2s 폴링
     refetchOnWindowFocus: true,
   });
@@ -185,7 +182,7 @@ export default function Recipes() {
     sessionStorage.setItem('recipes.progressStep', '10');
 
     // 목록 새로고침 & 탭 LIST로 이동
-    qc.invalidateQueries({ queryKey: qKeys.sessions });
+    queryClient.invalidateQueries({ queryKey: recipeKeys.sessions });
     sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
     setTab(Tab.LIST);
 
@@ -204,7 +201,7 @@ export default function Recipes() {
         d.errorMessage || d.title || '레시피 생성에 실패했어요. 잠시 후 다시 시도해주세요.',
       );
     }
-  }, [waitingSessionId, waitDetail.isSuccess, waitDetail.data, qc]);
+  }, [waitingSessionId, waitDetail.isSuccess, waitDetail.data, queryClient]);
 
   // ★ progress 애니메이션: generatingVisible 동안 55초에 걸쳐 step 0→10
   useEffect(() => {
@@ -226,11 +223,7 @@ export default function Recipes() {
   }, [generatingVisible]);
 
   // 세션 목록
-  const sessions = useQuery({
-    queryKey: qKeys.sessions,
-    queryFn: recipeApi.listSessions,
-    enabled: tab === Tab.LIST,
-  });
+  const sessions = useRecipeSessions(tab === Tab.LIST);
 
   // ▼ 정렬 / 편집 관련 상태
   const [sessionOrder, setSessionOrder] = useState([]);
@@ -281,12 +274,7 @@ export default function Recipes() {
     });
   };
 
-  const reorderMutation = useMutation({
-    mutationFn: (orderedIds) => recipeApi.reorderSessions(orderedIds),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qKeys.sessions });
-    },
-  });
+  const reorderMutation = useReorderSessions();
 
   const handleDragEnd = () => {
     setDraggingId(null);
@@ -296,19 +284,9 @@ export default function Recipes() {
   };
 
   // 제목 수정 / 삭제 mutation
-  const updateTitleMutation = useMutation({
-    mutationFn: ({ id, title }) => recipeApi.updateSessionTitle(id, title),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qKeys.sessions });
-    },
-  });
+  const updateTitleMutation = useUpdateSessionTitle();
 
-  const deleteSessionMutation = useMutation({
-    mutationFn: (id) => recipeApi.deleteSession(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qKeys.sessions });
-    },
-  });
+  const deleteSessionMutation = useDeleteSession();
 
   const submitTitleChange = (room) => {
     const nextTitle = editingTitle.trim();
