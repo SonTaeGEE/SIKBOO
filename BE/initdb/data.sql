@@ -82,8 +82,8 @@ EXECUTE FUNCTION set_default_due_if_null();
 CREATE TABLE recipe (
     recipe_id BIGSERIAL PRIMARY KEY,
     member_id BIGINT NOT NULL,
-    recipe_name   VARCHAR(100)  NOT NULL,
-    recipe_detail VARCHAR(1000) NOT NULL,
+    recipe_name   TEXT  NOT NULL,
+    recipe_detail TEXT NOT NULL,
     display_order BIGINT NOT NULL,  -- 11.14 신규 추가
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_recipe_member FOREIGN KEY (member_id)
