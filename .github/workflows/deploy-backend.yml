@@ -1,0 +1,46 @@
+name: Deploy Spring Boot to OCI
+
+on:
+  push:
+    branches: [main] # main 브랜치 push 시 자동 배포
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Build JAR
+        run: |
+          chmod +x ./gradlew
+          ./gradlew clean bootJar
+
+      - name: Copy JAR to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "build/libs/*.jar"
+          target: "/opt/sikboo/"
+          overwrite: true
+
+      - name: Restart Spring Boot service on server
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sudo systemctl stop sikboo
+            sudo mv /opt/sikboo/*.jar /opt/sikboo/sikboo.jar
+            sudo systemctl start sikboo
+            sudo systemctl status sikboo --no-pager
