@@ -37,7 +37,7 @@ public class SecurityConfig {
 	private final CustomOAuth2UserService customOAuth2UserService;
 	// OAuth2 로그인 성공 시 JWT 발급/쿠키 설정/리다이렉트 처리 핸들러
 	private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
-//⬇⬇ 추가: 온보딩 가드 주입
+	// 온보딩 가드 주입
 	private final com.stg.sikboo.onboarding.infra.OnboardingGuardFilter onboardingGuardFilter;
 
 	@Value("${app.frontend-url:}")
@@ -112,6 +112,9 @@ public class SecurityConfig {
 						// 리프레시 토큰 회전 엔드포인트: "/api/auth/refresh" 사용
 						.requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
 
+						// 회원 탈퇴허용
+						.requestMatchers(HttpMethod.DELETE, "/api/members/me").authenticated()
+
 						// 위에 명시되지 않은 모든 요청은 인증 필요
 						.anyRequest().authenticated())
 
@@ -138,7 +141,7 @@ public class SecurityConfig {
 				// 리소스 서버 설정: JWT 검증 사용, 토큰 해석은 커스터마이즈된 resolver 사용
 				.oauth2ResourceServer(rs -> rs.jwt(Customizer.withDefaults()).bearerTokenResolver(cookieOrAuthHeader()))
 
-				// ⬇⬇ 추가: /api/** 에서는 302 리다이렉트 대신 401 JSON 응답
+				// /api/** 에서는 302 리다이렉트 대신 401 JSON 응답
 				.exceptionHandling(ex -> ex.defaultAuthenticationEntryPointFor((request, response, authException) -> {
 					response.setStatus(401);
 					response.setContentType("application/json;charset=UTF-8");
@@ -177,27 +180,7 @@ public class SecurityConfig {
 		};
 	}
 
-////CORS 설정 (배포용)
-//	@Bean
-//	CorsConfigurationSource cors() {
-//		var cfg = new CorsConfiguration();
-//
-//		// 🔥 우리가 허용할 Origin을 직접 명시
-//		cfg.setAllowedOrigins(List.of("https://sikboo.vercel.app", "https://api.sikboo.shop", "https://sikboo.shop"));
-//
-//		cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-//		cfg.setAllowedHeaders(List.of("*"));
-//		cfg.setAllowCredentials(true);
-//
-//		// 쿠키 인증에서는 ExposedHeaders가 필요 없음
-//		// cfg.setExposedHeaders(List.of("Authorization")); // 필요없음
-//
-//		var src = new UrlBasedCorsConfigurationSource();
-//		src.registerCorsConfiguration("/**", cfg);
-//		return src;
-//	}
-
-  // CORS 설정: allowedOriginsCsv가 있으면 그 값을 사용하고 없으면 FRONTEND_URL 사용 (로컬용)
+  // CORS 설정: allowedOriginsCsv가 있으면 그 값을 사용하고 없으면 FRONTEND_URL 사용
   @Bean
   CorsConfigurationSource cors() {
     var cfg = new CorsConfiguration();

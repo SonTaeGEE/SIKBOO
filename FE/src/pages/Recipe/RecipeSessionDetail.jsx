@@ -37,7 +37,7 @@ export default function RecipeSessionDetail() {
       )}
 
       {/* 색상 레전드 */}
-      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl bg-white px-3 py-2 text-[11px] text-slate-500 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl bg-white px-3 py-2 text-[11px] text-slate-500 shadow-sm">
         <span className="font-semibold text-slate-700">표기 안내</span>
         <div className="flex items-center gap-1">
           <span className="h-2 w-2 rounded-full bg-[#6366F1]" />
@@ -50,11 +50,11 @@ export default function RecipeSessionDetail() {
       </div>
 
       {/* 있는 식재료로 만든 레시피 */}
-      <SectionTitle>있는 식재료로 만든 레시피</SectionTitle>
+      <SectionTitle className="mt-2">있는 식재료로 만든 레시피</SectionTitle>
       {have.length === 0 ? (
         <Empty text="조건에 맞는 레시피가 없어요." />
       ) : (
-        <div className="space-y-3">
+        <div className="mt-2 space-y-3">
           {have.map((r) => (
             <RecipeCard key={r.id} r={r} />
           ))}
@@ -66,7 +66,7 @@ export default function RecipeSessionDetail() {
       {need.length === 0 ? (
         <Empty text="추가 식재료가 필요한 레시피가 없어요." />
       ) : (
-        <div className="mb-10 space-y-3">
+        <div className="mt-2 mb-10 space-y-3">
           {need.map((r) => (
             <RecipeCard key={r.id} r={r} />
           ))}

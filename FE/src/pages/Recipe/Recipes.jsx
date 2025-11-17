@@ -144,7 +144,7 @@ export default function Recipes() {
     refetchOnWindowFocus: true,
   });
 
-  // ★ 상세 데이터가 준비되었는지 판별 (status 또는 데이터 유무 기준)
+  // ★ 상세 데이터가 준비되었는지 판별 (status 또는 데이터 유무 + generating 플래그 기준)
   useEffect(() => {
     if (!waitingSessionId) return;
     if (!waitDetail.isSuccess) return;
@@ -163,8 +163,20 @@ export default function Recipes() {
     const hasAnyRecipes =
       (Array.isArray(d.have) && d.have.length > 0) || (Array.isArray(d.need) && d.need.length > 0);
 
-    // 아직 아무 상태도 아니고, 데이터도 비어 있으면 → 계속 대기
-    if (!isDoneStatus && !isFailedStatus && !hasAnyRecipes) {
+    // 백엔드가 따로 status를 안 넣고,
+    // generating=false + 레시피 배열 비어 있고 + 실패 메시지(또는 errorMessage)만 내려주는 경우까지
+    // "종료된 상태(실패)"로 취급
+    const looksFailedWithoutStatus =
+      d.generating === false &&
+      !hasAnyRecipes &&
+      (d.errorMessage ||
+        (typeof d.title === 'string' && d.title.includes('실패')) ||
+        typeof d.error === 'string');
+
+    const isTerminal = isDoneStatus || isFailedStatus || hasAnyRecipes || looksFailedWithoutStatus;
+
+    // 아직 진행 중이면 그냥 계속 대기
+    if (!isTerminal) {
       return;
     }
 
@@ -186,8 +198,11 @@ export default function Recipes() {
     sessionStorage.removeItem('recipes.isGenerating');
 
     // 실패 상태라면 토스트로 알려주기
-    if (isFailedStatus && !hasAnyRecipes) {
-      toast.error(d.errorMessage || '레시피 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
+    const isFailure = isFailedStatus || looksFailedWithoutStatus;
+    if (isFailure && !hasAnyRecipes) {
+      toast.error(
+        d.errorMessage || d.title || '레시피 생성에 실패했어요. 잠시 후 다시 시도해주세요.',
+      );
     }
   }, [waitingSessionId, waitDetail.isSuccess, waitDetail.data, qc]);
 
