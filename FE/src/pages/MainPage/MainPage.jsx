@@ -108,7 +108,9 @@ function Section({ title, subtitle, rightContent, children }) {
 // =======================
 // UI 컴포넌트 후보: QuickActionCard
 // =======================
-function QuickActionCard({ icon: Icon, title, description, onClick, colorClass }) {
+function QuickActionCard({ icon, title, description, onClick, colorClass }) {
+  const Icon = icon;
+
   return (
     <button
       type="button"
