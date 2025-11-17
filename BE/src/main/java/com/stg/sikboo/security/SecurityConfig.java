@@ -177,49 +177,49 @@ public class SecurityConfig {
 		};
 	}
 
-//CORS 설정
-	@Bean
-	CorsConfigurationSource cors() {
-		var cfg = new CorsConfiguration();
-
-		// 🔥 우리가 허용할 Origin을 직접 명시
-		cfg.setAllowedOrigins(List.of("https://sikboo.vercel.app", "https://api.sikboo.shop", "https://sikboo.shop"));
-
-		cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-		cfg.setAllowedHeaders(List.of("*"));
-		cfg.setAllowCredentials(true);
-
-		// 쿠키 인증에서는 ExposedHeaders가 필요 없음
-		// cfg.setExposedHeaders(List.of("Authorization")); // 필요없음
-
-		var src = new UrlBasedCorsConfigurationSource();
-		src.registerCorsConfiguration("/**", cfg);
-		return src;
-	}
-
-//  // CORS 설정: allowedOriginsCsv가 있으면 그 값을 사용하고 없으면 FRONTEND_URL 사용
-//  @Bean
-//  CorsConfigurationSource cors() {
-//    var cfg = new CorsConfiguration();
+////CORS 설정 (배포용)
+//	@Bean
+//	CorsConfigurationSource cors() {
+//		var cfg = new CorsConfiguration();
 //
-//    List<String> origins;
-//    if (allowedOriginsCsv != null && !allowedOriginsCsv.isBlank()) {
-//      origins = Arrays.stream(allowedOriginsCsv.split(","))
-//                      .map(String::trim)
-//                      .filter(s -> !s.isBlank())
-//                      .toList();
-//    } else {
-//      origins = List.of(FRONTEND_URL);
-//    }
-//    cfg.setAllowedOrigins(origins);
+//		// 🔥 우리가 허용할 Origin을 직접 명시
+//		cfg.setAllowedOrigins(List.of("https://sikboo.vercel.app", "https://api.sikboo.shop", "https://sikboo.shop"));
 //
-//    cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","PATCH","OPTIONS"));
-//    cfg.setAllowedHeaders(List.of("*"));
-//    cfg.setAllowCredentials(true);
-//    cfg.setExposedHeaders(List.of("Authorization"));
+//		cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+//		cfg.setAllowedHeaders(List.of("*"));
+//		cfg.setAllowCredentials(true);
 //
-//    var src = new UrlBasedCorsConfigurationSource();
-//    src.registerCorsConfiguration("/**", cfg);
-//    return src;
-//  }
+//		// 쿠키 인증에서는 ExposedHeaders가 필요 없음
+//		// cfg.setExposedHeaders(List.of("Authorization")); // 필요없음
+//
+//		var src = new UrlBasedCorsConfigurationSource();
+//		src.registerCorsConfiguration("/**", cfg);
+//		return src;
+//	}
+
+  // CORS 설정: allowedOriginsCsv가 있으면 그 값을 사용하고 없으면 FRONTEND_URL 사용 (로컬용)
+  @Bean
+  CorsConfigurationSource cors() {
+    var cfg = new CorsConfiguration();
+
+    List<String> origins;
+    if (allowedOriginsCsv != null && !allowedOriginsCsv.isBlank()) {
+      origins = Arrays.stream(allowedOriginsCsv.split(","))
+                      .map(String::trim)
+                      .filter(s -> !s.isBlank())
+                      .toList();
+    } else {
+      origins = List.of(FRONTEND_URL);
+    }
+    cfg.setAllowedOrigins(origins);
+
+    cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","PATCH","OPTIONS"));
+    cfg.setAllowedHeaders(List.of("*"));
+    cfg.setAllowCredentials(true);
+    cfg.setExposedHeaders(List.of("Authorization"));
+
+    var src = new UrlBasedCorsConfigurationSource();
+    src.registerCorsConfiguration("/**", cfg);
+    return src;
+  }
 }
