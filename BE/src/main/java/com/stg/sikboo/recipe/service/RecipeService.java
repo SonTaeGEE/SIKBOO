@@ -301,6 +301,26 @@ public class RecipeService {
                 r.ingredients.seasoning = normalize(r.ingredients.seasoning);
             }
 
+            // 🔴 여기부터 추가: need 레시피 중 실제로 추가 재료가 없는 것은 have로 이동
+            List<AiRecipe> moveToHave = new ArrayList<>();
+            Iterator<AiRecipe> it = res.need.iterator();
+            while (it.hasNext()) {
+                AiRecipe r = it.next();
+                boolean noRealNeed =
+                        r.ingredients == null ||
+                        r.ingredients.need == null ||
+                        r.ingredients.need.isEmpty();
+                if (noRealNeed) {
+                    moveToHave.add(r);
+                    it.remove();
+                }
+            }
+            if (!moveToHave.isEmpty()) {
+                log.info("[AI] need 그룹에서 추가 재료가 없는 레시피 {}개를 have 그룹으로 이동", moveToHave.size());
+                res.have.addAll(moveToHave);
+            }
+            // 🔴 추가 끝
+
             generatedTitlesHave
                     .computeIfAbsent(memberId, k -> new HashSet<>())
                     .addAll(res.have.stream().map(r -> r.title).filter(Objects::nonNull).toList());
