@@ -1,18 +1,21 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+
+import sikbooLogo from '@/assets/sikboo.png';
 import { submitOnboarding, skipOnboarding } from '@/api/authApi';
 import { useAnalyzeIngredientText, useAddIngredientsFromAi } from '@/hooks/useIngredient';
-import sikbooLogo from '@/assets/sikboo.png';
-import toast from 'react-hot-toast';
+import OnboardingSkipModal from '@/components/Auth/OnboardingSkipModal';
 
 const Onboarding = () => {
   const navigate = useNavigate();
   const analyzeMutation = useAnalyzeIngredientText();
   const addFromAiMutation = useAddIngredientsFromAi();
-  
+
   const [step, setStep] = useState(1); // 1: 프로필, 2: 재료
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState('manual'); // 'manual' | 'ai'
+  const [showSkipDialog, setShowSkipDialog] = useState(false);
 
   // 프로필 데이터
   const [diseases, setDiseases] = useState('');
@@ -27,18 +30,21 @@ const Onboarding = () => {
   const [aiText, setAiText] = useState('');
   const [aiResult, setAiResult] = useState(null);
 
-  const handleSkip = async () => {
-    if (!confirm('설문을 건너뛰시겠습니까?\n나중에 마이페이지에서 수정할 수 있습니다.')) return;
+  const handleSkipClick = () => {
+    setShowSkipDialog(true);
+  };
 
+  const handleSkipConfirm = async () => {
     setLoading(true);
     try {
       await skipOnboarding();
-      navigate('/ingredients', { replace: true });
+      navigate('/main', { replace: true });
     } catch (error) {
       console.error('건너뛰기 실패:', error);
       toast.error('오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setLoading(false);
+      setShowSkipDialog(false);
     }
   };
 
@@ -323,7 +329,7 @@ const Onboarding = () => {
             {/* 버튼 */}
             <div className="mt-6 flex gap-3">
               <button
-                onClick={handleSkip}
+                onClick={handleSkipClick}
                 disabled={loading}
                 className="flex-1 rounded-lg border border-gray-300 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -637,7 +643,7 @@ const Onboarding = () => {
                 이전
               </button>
               <button
-                onClick={handleSkip}
+                onClick={handleSkipClick}
                 disabled={loading}
                 className="flex-1 rounded-lg border border-gray-300 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -661,6 +667,13 @@ const Onboarding = () => {
           </div>
         )}
       </div>
+
+      <OnboardingSkipModal
+        showSkipDialog={showSkipDialog}
+        setShowSkipDialog={setShowSkipDialog}
+        handleSkip={handleSkipConfirm}
+        isPending={loading}
+      />
     </div>
   );
 };

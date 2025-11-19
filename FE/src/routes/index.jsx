@@ -84,8 +84,8 @@ const AppRoutes = () => {
       hideNavbar={headerConfig.hideNav}
     >
       <Routes>
-        {/* 기본 루트는 그대로 로그인으로 리다이렉트 */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* 기본 루트는 메인 페이지로 */}
+        <Route path="/" element={<Navigate to="/main" replace />} />
 
         {/* ✅ 메인 페이지 라우트 */}
         <Route path="/main" element={<MainPage />} />
