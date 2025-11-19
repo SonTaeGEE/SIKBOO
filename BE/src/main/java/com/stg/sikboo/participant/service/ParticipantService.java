@@ -6,11 +6,13 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.stg.sikboo.groupbuying.domain.GroupBuying;
 import com.stg.sikboo.groupbuying.domain.repository.GroupBuyingRepository;
+import com.stg.sikboo.groupbuying.dto.GroupBuyingUpdateMessage;
 import com.stg.sikboo.groupbuying.dto.response.GroupBuyingPageResponse;
 import com.stg.sikboo.groupbuying.dto.response.GroupBuyingResponse;
 import com.stg.sikboo.member.domain.Member;
@@ -31,6 +33,7 @@ public class ParticipantService {
     private final ParticipantRepository participantRepository;
     private final GroupBuyingRepository groupBuyingRepository;
     private final MemberRepository memberRepository;
+    private final SimpMessagingTemplate messagingTemplate;
     
     /**
      * 공동구매 참여
@@ -68,6 +71,10 @@ public class ParticipantService {
         groupBuying.getParticipants().add(saved);
         groupBuyingRepository.flush();
         
+        // 7. WebSocket으로 특정 공동구매 방에 참여자 추가 알림
+        sendParticipantUpdate(groupBuying.getGroupBuyingId(), "PARTICIPANT_JOINED", 
+                groupBuying.getCurrentPeople(), groupBuying.getStatus().name(), request.getMemberId());
+        
         return ParticipantResponse.from(saved);
     }
     
@@ -94,6 +101,10 @@ public class ParticipantService {
         // 5. 참여 삭제
         participantRepository.delete(participant);
         groupBuyingRepository.flush();
+        
+        // 6. WebSocket으로 특정 공동구매 방에 참여자 나가기 알림
+        sendParticipantUpdate(groupBuying.getGroupBuyingId(), "PARTICIPANT_LEFT", 
+                groupBuying.getCurrentPeople(), groupBuying.getStatus().name(), memberId);
     }
     
     /**
@@ -166,5 +177,21 @@ public class ParticipantService {
                 .last(result.isLast())
                 .hasNext(result.hasNext())
                 .build();
+    }
+    
+    /**
+     * WebSocket으로 특정 공동구매 방에 참여자 업데이트 전송
+     */
+    private void sendParticipantUpdate(Long groupBuyingId, String updateType, Integer currentPeople, String status, Long memberId) {
+        GroupBuyingUpdateMessage message = GroupBuyingUpdateMessage.builder()
+                .groupBuyingId(groupBuyingId)
+                .updateType(updateType)
+                .currentPeople(currentPeople)
+                .status(status)
+                .memberId(memberId)
+                .build();
+        
+        // 특정 공동구매 방으로만 전송
+        messagingTemplate.convertAndSend("/topic/groupbuying/" + groupBuyingId + "/participants", message);
     }
 }
