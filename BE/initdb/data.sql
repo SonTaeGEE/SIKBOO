@@ -6,6 +6,9 @@
 -- PostGIS 확장
 CREATE EXTENSION IF NOT EXISTS postgis;
 
+-- 벡터 확장 (OpenAI 임베딩용)
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- ============================================
 -- 1. 회원 (Member)
 -- ============================================
@@ -92,6 +95,36 @@ CREATE TABLE recipe (
 
 COMMENT ON TABLE recipe IS '레시피 정보';
 COMMENT ON COLUMN recipe.display_order IS '회원별 레시피 정렬 순서(1=최신)';
+
+-- ============================================
+-- RAG용 외부 레시피 벡터 테이블
+-- (식품의약품안전처 COOKRCP01 기반)
+-- ============================================
+CREATE TABLE recipe_vector (
+    recipe_vector_id BIGSERIAL PRIMARY KEY,   -- 우리 쪽 PK
+    rcp_seq          TEXT,                    -- 원본 API의 RCP_SEQ (있으면 나중에 추적용)
+    title            TEXT NOT NULL,           -- 메뉴명 (RCP_NM)
+    ingredients      TEXT NOT NULL,           -- 재료정보 (RCP_PARTS_DTLS 전체 문자열)
+    steps            TEXT NOT NULL,           -- 만드는 법 (MANUAL01~20을 합친 문자열)
+    embedding        VECTOR(1536) NOT NULL,   -- text-embedding-3-small 기준
+    created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE recipe_vector IS '공공데이터 기반 레시피 RAG용 벡터 테이블';
+COMMENT ON COLUMN recipe_vector.rcp_seq IS '식품안전정보원 COOKRCP01 RCP_SEQ';
+COMMENT ON COLUMN recipe_vector.title IS '메뉴명(RCP_NM)';
+COMMENT ON COLUMN recipe_vector.ingredients IS '재료정보(RCP_PARTS_DTLS)';
+COMMENT ON COLUMN recipe_vector.steps IS '만드는 법(MANUAL01~MANUAL20 합친 텍스트)';
+
+CREATE INDEX recipe_vector_embedding_idx
+ON recipe_vector
+USING hnsw (embedding vector_cosine_ops);
+
+-- (테스트용) 상위 250개 조회
+SELECT * FROM recipe_vector LIMIT 250;
+
+-- 초기화용 (초기 로딩 스크립트에서 여러 번 실행될 수 있으므로)
+TRUNCATE TABLE recipe_vector RESTART IDENTITY CASCADE;
 
 -- ============================================
 -- 4. 공동구매 (GroupBuying)

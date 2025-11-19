@@ -46,6 +46,8 @@ dependencies {
  	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
  	implementation 'com.nimbusds:nimbus-jose-jwt:9.41.2'  // JWT 발급
  	implementation 'org.springframework.security:spring-security-oauth2-jose'   // Jwt/JwtDecoder 들어있음
+ 	
+ 	implementation 'org.postgresql:postgresql'
 	
 	// Hibernate Spatial for PostGIS
 	implementation 'org.hibernate.orm:hibernate-spatial'
@@ -53,7 +55,6 @@ dependencies {
 	
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
-	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
