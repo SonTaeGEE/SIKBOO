@@ -90,9 +90,34 @@ export default function Recipes() {
       return n;
     });
 
+  // 🔹 생성 탭 재료 리스트 페이징 상태
+  const [ingredientPage, setIngredientPage] = useState(0);
+  const ingredientPageSize = 10;
+
+  const ingredientTotalElements = filteredIngredients.length;
+  const ingredientTotalPages =
+    ingredientTotalElements === 0 ? 0 : Math.ceil(ingredientTotalElements / ingredientPageSize);
+
+  // 검색어 / 데이터 바뀌면 첫 페이지로
+  useEffect(() => {
+    setIngredientPage(0);
+  }, [ingredientKeyword, my.data]);
+
+  const pagedIngredients = useMemo(() => {
+    if (!filteredIngredients || filteredIngredients.length === 0) return [];
+    const start = ingredientPage * ingredientPageSize;
+    const end = start + ingredientPageSize;
+    return filteredIngredients.slice(start, end);
+  }, [filteredIngredients, ingredientPage, ingredientPageSize]);
+
+  const handleIngredientPageChange = (newPage) => {
+    if (newPage < 0 || newPage >= ingredientTotalPages) return;
+    setIngredientPage(newPage);
+  };
+
   // 레시피 생성(세션 생성)
   const genMutation = useGenerateRecipes();
-  
+
   const gen = {
     ...genMutation,
     mutate: () => {
@@ -103,7 +128,7 @@ export default function Recipes() {
       sessionStorage.removeItem('recipes.progressStep');
       sessionStorage.removeItem('recipes.waitingSessionId');
       sessionStorage.removeItem('recipes.isGenerating');
-      
+
       genMutation.mutate(Array.from(selected), {
         onSuccess: (created) => {
           // 선택 초기화
@@ -254,6 +279,31 @@ export default function Recipes() {
     return list.filter((room) => (room.title || '').toLowerCase().includes(kw));
   }, [sessionOrder, sessionKeyword]);
 
+  // 🔹 목록 탭 세션 리스트 페이징 상태
+  const [sessionPage, setSessionPage] = useState(0);
+  const sessionPageSize = 10;
+
+  const sessionTotalElements = filteredSessions.length;
+  const sessionTotalPages =
+    sessionTotalElements === 0 ? 0 : Math.ceil(sessionTotalElements / sessionPageSize);
+
+  // 검색어 / 정렬 변경 시 첫 페이지로
+  useEffect(() => {
+    setSessionPage(0);
+  }, [sessionKeyword, sessionOrder]);
+
+  const pagedSessions = useMemo(() => {
+    if (!filteredSessions || filteredSessions.length === 0) return [];
+    const start = sessionPage * sessionPageSize;
+    const end = start + sessionPageSize;
+    return filteredSessions.slice(start, end);
+  }, [filteredSessions, sessionPage, sessionPageSize]);
+
+  const handleSessionPageChange = (newPage) => {
+    if (newPage < 0 || newPage >= sessionTotalPages) return;
+    setSessionPage(newPage);
+  };
+
   // 드래그 정렬
   const handleDragStart = (id) => {
     setDraggingId(id);
@@ -387,16 +437,80 @@ export default function Recipes() {
               (filteredIngredients.length === 0 ? (
                 <Empty text="조건에 맞는 재료가 없어요." />
               ) : (
-                <ul className="divide-y divide-slate-100 rounded-2xl bg-white px-4">
-                  {filteredIngredients.map((it) => (
-                    <IngredientRow
-                      key={it.id}
-                      it={it}
-                      selected={selected.has(it.id)}
-                      onToggle={toggle}
-                    />
-                  ))}
-                </ul>
+                <>
+                  <ul className="divide-y divide-slate-100 rounded-2xl bg-white px-4">
+                    {pagedIngredients.map((it) => (
+                      <IngredientRow
+                        key={it.id}
+                        it={it}
+                        selected={selected.has(it.id)}
+                        onToggle={toggle}
+                      />
+                    ))}
+                  </ul>
+
+                  {ingredientTotalPages > 1 && (
+                    <div className="mt-6 flex flex-col items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleIngredientPageChange(ingredientPage - 1)}
+                          disabled={ingredientPage === 0}
+                          className="rounded-full border border-violet-100 bg-white px-3 py-1 text-sm text-slate-600 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-30"
+                          type="button"
+                        >
+                          ‹
+                        </button>
+
+                        {Array.from({ length: ingredientTotalPages }, (_, i) => i).map(
+                          (pageNum) => {
+                            if (
+                              pageNum === 0 ||
+                              pageNum === ingredientTotalPages - 1 ||
+                              Math.abs(pageNum - ingredientPage) <= 2
+                            ) {
+                              return (
+                                <button
+                                  key={pageNum}
+                                  onClick={() => handleIngredientPageChange(pageNum)}
+                                  className={`rounded-full px-3 py-1 text-sm ${
+                                    pageNum === ingredientPage
+                                      ? 'bg-[#5f0080] text-white shadow-sm'
+                                      : 'border border-violet-100 bg-white text-[#333] hover:bg-violet-50'
+                                  }`}
+                                  type="button"
+                                >
+                                  {pageNum + 1}
+                                </button>
+                              );
+                            }
+                            if (pageNum === ingredientPage - 3 || pageNum === ingredientPage + 3) {
+                              return (
+                                <span key={pageNum} className="px-2 text-gray-400">
+                                  ...
+                                </span>
+                              );
+                            }
+                            return null;
+                          },
+                        )}
+
+                        <button
+                          onClick={() => handleIngredientPageChange(ingredientPage + 1)}
+                          disabled={ingredientPage === ingredientTotalPages - 1}
+                          className="rounded-full border border-violet-100 bg-white px-3 py-1 text-sm text-slate-600 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-30"
+                          type="button"
+                        >
+                          ›
+                        </button>
+                      </div>
+
+                      <span className="text-xs text-gray-600">
+                        {ingredientPage + 1} / {ingredientTotalPages} 페이지 (전체{' '}
+                        {ingredientTotalElements}개)
+                      </span>
+                    </div>
+                  )}
+                </>
               ))}
           </>
         ) : (
@@ -419,176 +533,239 @@ export default function Recipes() {
             ) : filteredSessions.length === 0 ? (
               <Empty text="조건에 맞는 레시피 방이 없어요." />
             ) : (
-              <div className="mb-10 space-y-3">
-                {filteredSessions.map((room) => {
-                  const isCurrentGeneratingRoom =
-                    waitingSessionId != null && room.id === waitingSessionId && generatingVisible;
+              <>
+                <div className="mb-10 space-y-3">
+                  {pagedSessions.map((room) => {
+                    const isCurrentGeneratingRoom =
+                      waitingSessionId != null && room.id === waitingSessionId && generatingVisible;
 
-                  const createdAtText = room.createdAt
-                    ? new Date(room.createdAt).toLocaleString()
-                    : '';
+                    const createdAtText = room.createdAt
+                      ? new Date(room.createdAt).toLocaleString()
+                      : '';
 
-                  const isDragging = draggingId === room.id;
-                  const isEditing = editingRoomId === room.id;
+                    const isDragging = draggingId === room.id;
+                    const isEditing = editingRoomId === room.id;
 
-                  return (
-                    <div
-                      key={room.id}
-                      className={cx(
-                        'relative w-full transition-transform duration-150',
-                        isDragging && 'scale-[1.01] shadow-lg ring-2 ring-violet-200',
-                      )}
-                      onDragEnter={() => handleDragEnter(room.id)}
-                      onDragOver={(e) => e.preventDefault()}
-                    >
-                      <button
-                        type="button"
-                        disabled={isCurrentGeneratingRoom}
-                        onClick={() => {
-                          if (isCurrentGeneratingRoom || isEditing) return; // 생성중이거나 편집 중이면 진입 막기
-                          sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
-                          navigate(`/recipes/sessions/${room.id}`);
-                        }}
+                    return (
+                      <div
+                        key={room.id}
                         className={cx(
-                          'flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition',
-                          isCurrentGeneratingRoom
-                            ? 'cursor-not-allowed bg-gradient-to-r from-emerald-100 via-emerald-50 to-emerald-100 opacity-95'
-                            : 'bg-white hover:bg-violet-50',
+                          'relative w-full transition-transform duration-150',
+                          isDragging && 'scale-[1.01] shadow-lg ring-2 ring-violet-200',
                         )}
+                        onDragEnter={() => handleDragEnter(room.id)}
+                        onDragOver={(e) => e.preventDefault()}
                       >
-                        {/* 드래그 핸들 (석 삼 모양) */}
+                        {/* 🔹 여기만 button → div 로 변경 */}
                         <div
+                          role="button"
+                          tabIndex={0}
+                          aria-disabled={isCurrentGeneratingRoom}
+                          onClick={() => {
+                            if (isCurrentGeneratingRoom || isEditing) return; // 생성중이거나 편집 중이면 진입 막기
+                            sessionStorage.setItem('recipes.defaultTab', Tab.LIST);
+                            navigate(`/recipes/sessions/${room.id}`);
+                          }}
                           className={cx(
-                            'mr-1 flex h-8 w-4 cursor-grab flex-col items-center justify-center text-slate-400',
-                            isDragging && 'cursor-grabbing',
+                            'flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition',
+                            isCurrentGeneratingRoom
+                              ? 'cursor-not-allowed bg-gradient-to-r from-emerald-100 via-emerald-50 to-emerald-100 opacity-95'
+                              : 'bg-white hover:bg-violet-50',
                           )}
-                          draggable
-                          onDragStart={(e) => {
-                            e.stopPropagation();
-                            handleDragStart(room.id);
-                          }}
-                          onDragEnd={(e) => {
-                            e.stopPropagation();
-                            handleDragEnd();
-                          }}
-                          onDragOver={(e) => e.preventDefault()}
                         >
-                          <span className="mb-[3px] h-[2px] w-3 rounded-full bg-slate-300" />
-                          <span className="mb-[3px] h-[2px] w-3 rounded-full bg-slate-300" />
-                          <span className="h-[2px] w-3 rounded-full bg-slate-300" />
-                        </div>
-
-                        <div className="flex min-w-0 flex-1 flex-col gap-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 flex-1 items-center gap-2">
-                              {/* 제목 / 편집 모드 */}
-                              {isEditing ? (
-                                <div className="flex min-w-0 flex-1 items-center gap-2">
-                                  <textarea
-                                    rows={1}
-                                    value={editingTitle}
-                                    onChange={(e) => setEditingTitle(e.target.value)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        submitTitleChange(room);
-                                      }
-                                    }}
-                                    className="max-h-20 min-h-[36px] flex-1 resize-none rounded-md border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      submitTitleChange(room);
-                                    }}
-                                    className="shrink-0 rounded-md bg-violet-500 px-3 py-1 text-xs font-semibold text-white"
-                                  >
-                                    확인
-                                  </button>
-                                </div>
-                              ) : (
-                                <span
-                                  className={cx(
-                                    'truncate text-sm font-semibold text-slate-900',
-                                    isCurrentGeneratingRoom && 'animate-pulse',
-                                  )}
-                                >
-                                  {isCurrentGeneratingRoom ? '레시피 생성중…' : room.title}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                              {/* 옵션 메뉴(점 3개) */}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setMenuOpenId((prev) => (prev === room.id ? null : room.id));
-                                }}
-                                className="flex h-6 w-6 items-center justify-center rounded-full text-lg leading-none text-slate-400 hover:bg-slate-100"
-                              >
-                                <span className="translate-y-[-1px]">⋮</span>
-                              </button>
-                              <span>{createdAtText}</span>
-                            </div>
+                          {/* 드래그 핸들 (석 삼 모양) */}
+                          <div
+                            className={cx(
+                              'mr-1 flex h-8 w-4 cursor-grab flex-col items-center justify-center text-slate-400',
+                              isDragging && 'cursor-grabbing',
+                            )}
+                            draggable
+                            onDragStart={(e) => {
+                              e.stopPropagation();
+                              handleDragStart(room.id);
+                            }}
+                            onDragEnd={(e) => {
+                              e.stopPropagation();
+                              handleDragEnd();
+                            }}
+                            onDragOver={(e) => e.preventDefault()}
+                          >
+                            <span className="mb-[3px] h-[2px] w-3 rounded-full bg-slate-300" />
+                            <span className="mb-[3px] h-[2px] w-3 rounded-full bg-slate-300" />
+                            <span className="h-[2px] w-3 rounded-full bg-slate-300" />
                           </div>
 
-                          {/* 이 방이 현재 생성중일 때만 진행률 바 노출 */}
-                          {isCurrentGeneratingRoom && (
-                            <div className="mt-1">
-                              <div className="mb-1 flex items-center justify-between text-[11px] text-slate-600">
-                                <span>
-                                  진행률 {progressStep}/10 ({progressPercent}%)
-                                </span>
+                          <div className="flex min-w-0 flex-1 flex-col gap-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex min-w-0 flex-1 items-center gap-2">
+                                {/* 제목 / 편집 모드 */}
+                                {isEditing ? (
+                                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                                    <textarea
+                                      rows={1}
+                                      value={editingTitle}
+                                      onChange={(e) => setEditingTitle(e.target.value)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault();
+                                          submitTitleChange(room);
+                                        }
+                                      }}
+                                      className="max-h-20 min-h-[36px] flex-1 resize-none rounded-md border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        submitTitleChange(room);
+                                      }}
+                                      className="shrink-0 rounded-md bg-violet-500 px-3 py-1 text-xs font-semibold text-white"
+                                    >
+                                      확인
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span
+                                    className={cx(
+                                      'truncate text-sm font-semibold text-slate-900',
+                                      isCurrentGeneratingRoom && 'animate-pulse',
+                                    )}
+                                  >
+                                    {isCurrentGeneratingRoom ? '레시피 생성중…' : room.title}
+                                  </span>
+                                )}
                               </div>
-                              <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
-                                <div
-                                  className="h-full rounded-full bg-emerald-400 transition-all duration-500 ease-out"
-                                  style={{ width: `${progressPercent}%` }}
-                                />
+
+                              <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                                {/* 옵션 메뉴(점 3개) */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMenuOpenId((prev) => (prev === room.id ? null : room.id));
+                                  }}
+                                  className="flex h-6 w-6 items-center justify-center rounded-full text-lg leading-none text-slate-400 hover:bg-slate-100"
+                                >
+                                  <span className="translate-y-[-1px]">⋮</span>
+                                </button>
+                                <span>{createdAtText}</span>
                               </div>
                             </div>
-                          )}
+
+                            {/* 이 방이 현재 생성중일 때만 진행률 바 노출 */}
+                            {isCurrentGeneratingRoom && (
+                              <div className="mt-1">
+                                <div className="mb-1 flex items-center justify-between text-[11px] text-slate-600">
+                                  <span>
+                                    진행률 {progressStep}/10 ({progressPercent}%)
+                                  </span>
+                                </div>
+                                <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
+                                  <div
+                                    className="h-full rounded-full bg-emerald-400 transition-all duration-500 ease-out"
+                                    style={{ width: `${progressPercent}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
+
+                        {/* 점3개 메뉴 */}
+                        {menuOpenId === room.id && (
+                          <div
+                            className="absolute top-2 right-4 z-20 w-32 rounded-md border border-slate-200 bg-white text-xs shadow-lg"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              className="block w-full px-3 py-2 text-left hover:bg-slate-100"
+                              onClick={() => {
+                                setEditingRoomId(room.id);
+                                setEditingTitle(room.title || '');
+                                setMenuOpenId(null);
+                              }}
+                            >
+                              제목 수정하기
+                            </button>
+                            <button
+                              type="button"
+                              className="block w-full px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                              onClick={() => {
+                                setMenuOpenId(null);
+                                setDeleteTargetId(room.id);
+                                setShowDeleteDialog(true);
+                              }}
+                            >
+                              삭제하기
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {sessionTotalPages > 1 && (
+                  <div className="mb-6 flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleSessionPageChange(sessionPage - 1)}
+                        disabled={sessionPage === 0}
+                        className="rounded-full border border-violet-100 bg-white px-3 py-1 text-sm text-slate-600 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-30"
+                        type="button"
+                      >
+                        ‹
                       </button>
 
-                      {/* 점3개 메뉴 */}
-                      {menuOpenId === room.id && (
-                        <div
-                          className="absolute top-2 right-4 z-20 w-32 rounded-md border border-slate-200 bg-white text-xs shadow-lg"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            className="block w-full px-3 py-2 text-left hover:bg-slate-100"
-                            onClick={() => {
-                              setEditingRoomId(room.id);
-                              setEditingTitle(room.title || '');
-                              setMenuOpenId(null);
-                            }}
-                          >
-                            제목 수정하기
-                          </button>
-                          <button
-                            type="button"
-                            className="block w-full px-3 py-2 text-left text-red-600 hover:bg-red-50"
-                            onClick={() => {
-                              setMenuOpenId(null);
-                              setDeleteTargetId(room.id);
-                              setShowDeleteDialog(true);
-                            }}
-                          >
-                            삭제하기
-                          </button>
-                        </div>
-                      )}
+                      {Array.from({ length: sessionTotalPages }, (_, i) => i).map((pageNum) => {
+                        if (
+                          pageNum === 0 ||
+                          pageNum === sessionTotalPages - 1 ||
+                          Math.abs(pageNum - sessionPage) <= 2
+                        ) {
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => handleSessionPageChange(pageNum)}
+                              className={`rounded-full px-3 py-1 text-sm ${
+                                pageNum === sessionPage
+                                  ? 'bg-[#5f0080] text-white shadow-sm'
+                                  : 'border border-violet-100 bg-white text-[#333] hover:bg-violet-50'
+                              }`}
+                              type="button"
+                            >
+                              {pageNum + 1}
+                            </button>
+                          );
+                        }
+                        if (pageNum === sessionPage - 3 || pageNum === sessionPage + 3) {
+                          return (
+                            <span key={pageNum} className="px-2 text-gray-400">
+                              ...
+                            </span>
+                          );
+                        }
+                        return null;
+                      })}
+
+                      <button
+                        onClick={() => handleSessionPageChange(sessionPage + 1)}
+                        disabled={sessionPage === sessionTotalPages - 1}
+                        className="rounded-full border border-violet-100 bg-white px-3 py-1 text-sm text-slate-600 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-30"
+                        type="button"
+                      >
+                        ›
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
+
+                    <span className="text-xs text-gray-600">
+                      {sessionPage + 1} / {sessionTotalPages} 페이지 (전체 {sessionTotalElements}개)
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

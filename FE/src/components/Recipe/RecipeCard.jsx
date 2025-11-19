@@ -64,7 +64,7 @@ export default function RecipeCard({ r }) {
 
           {r.seasoningIngredients?.length > 0 && (
             <section>
-              <div className="mb-1 text-xs font-semibold text-slate-800">양념장 재료</div>
+              <div className="mb-1 text-xs font-semibold text-slate-800">기본 재료</div>
               <ul className="list-disc pl-5 text-[13px]">
                 {r.seasoningIngredients.map((m, i) => (
                   <li key={i}>{m}</li>
