@@ -1,6 +1,7 @@
 // src/pages/Auth/OAuth2Success.jsx
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+
 import { getMe } from '@/api/authApi'; // ⬅️ authApi에서 import
 
 const OAuth2Success = () => {
@@ -41,8 +42,8 @@ const OAuth2Success = () => {
         // ★ 3) 온보딩 상태 체크 (추가된 부분)
         setMsg('온보딩 상태 확인 중...');
         try {
-          // 200 응답 → 온보딩 완료 → 재료 페이지로
-          nav('/ingredients', { replace: true });
+          // 200 응답 → 온보딩 완료 → 메인 페이지로
+          nav('/main', { replace: true });
         } catch (error) {
           if (error.response?.status === 428) {
             // 428 Precondition Required → 온보딩 미완료 → 온보딩 페이지로
@@ -64,7 +65,7 @@ const OAuth2Success = () => {
   }, [loc.search, loc.hash, nav]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-purple-50 to-white">
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-purple-50 to-white">
       <div className="rounded-2xl bg-white p-8 shadow-lg">
         <div className="flex flex-col items-center gap-4">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-solid border-[#5f0080] border-r-transparent"></div>

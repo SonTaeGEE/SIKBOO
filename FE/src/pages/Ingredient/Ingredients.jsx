@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+
 import {
   useIngredients,
   useDeleteIngredient,
   useCreateIngredient,
   useUpdateIngredient,
-  ingredientKeys,
 } from '@/hooks/useIngredient';
-import { useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
-import { useQueryClient } from '@tanstack/react-query';
+import IngredientDeleteModal from '@/components/Ingredient/IngredientDeleteModal';
 
 const LOCATION_TABS = [
   { key: null, label: '전체' },
@@ -55,7 +55,6 @@ const Badge = ({ daysLeft }) => {
 
 export default function Ingredients() {
   const nav = useNavigate();
-  const qc = useQueryClient();
 
   const [location, setLocation] = useState(null);
   const [q, setQ] = useState('');
@@ -63,7 +62,7 @@ export default function Ingredients() {
   const pageSize = 10;
 
   // React Query hooks
-  const { data, isLoading, error, refetch } = useIngredients(
+  const { data, isLoading } = useIngredients(
     {
       location,
       q: q || null,
@@ -103,24 +102,36 @@ export default function Ingredients() {
     memo: '',
   });
 
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
   // location 변경 시 페이지 초기화
   useEffect(() => {
     setCurrentPage(0);
   }, [location]);
 
-  const handleDelete = (id, name) => {
-    if (!confirm(`${name} 을(를) 삭제하시겠습니까?`)) return;
+  const handleDeleteClick = (id, name) => {
+    setDeleteTarget({ id, name });
+    setShowDeleteDialog(true);
+  };
 
-    deleteMutation.mutate(id, {
+  const handleDeleteConfirm = () => {
+    if (!deleteTarget) return;
+
+    deleteMutation.mutate(deleteTarget.id, {
       onSuccess: () => {
-        if (selectedItem?.id === id) {
+        if (selectedItem?.id === deleteTarget.id) {
           setOpenDetail(false);
           setSelectedItem(null);
         }
+        setShowDeleteDialog(false);
+        setDeleteTarget(null);
       },
       onError: (e) => {
         console.error(e);
         toast.error('삭제 중 오류가 발생했습니다.');
+        setShowDeleteDialog(false);
+        setDeleteTarget(null);
       },
     });
   };
@@ -362,7 +373,7 @@ export default function Ingredients() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDelete(it.id, it.ingredientName);
+                        handleDeleteClick(it.id, it.ingredientName);
                       }}
                       className="ml-3 rounded-full p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
                       aria-label="삭제"
@@ -570,7 +581,7 @@ export default function Ingredients() {
                 <button
                   type="button"
                   onClick={() => {
-                    handleDelete(selectedItem.id, selectedItem.ingredientName);
+                    handleDeleteClick(selectedItem.id, selectedItem.ingredientName);
                   }}
                   className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
                 >
@@ -599,6 +610,14 @@ export default function Ingredients() {
           </form>
         </div>
       )}
+
+      <IngredientDeleteModal
+        showDeleteDialog={showDeleteDialog}
+        setShowDeleteDialog={setShowDeleteDialog}
+        handleDelete={handleDeleteConfirm}
+        isPending={deleteMutation.isPending}
+        itemName={deleteTarget?.name || ''}
+      />
     </div>
   );
 }
