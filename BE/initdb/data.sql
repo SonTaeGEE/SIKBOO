@@ -120,12 +120,6 @@ CREATE INDEX recipe_vector_embedding_idx
 ON recipe_vector
 USING hnsw (embedding vector_cosine_ops);
 
--- (테스트용) 상위 250개 조회
-SELECT * FROM recipe_vector LIMIT 250;
-
--- 초기화용 (초기 로딩 스크립트에서 여러 번 실행될 수 있으므로)
-TRUNCATE TABLE recipe_vector RESTART IDENTITY CASCADE;
-
 -- ============================================
 -- 4. 공동구매 (GroupBuying)
 -- ============================================
