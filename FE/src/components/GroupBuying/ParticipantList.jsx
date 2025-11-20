@@ -1,4 +1,4 @@
-const ParticipantList = ({ participants, hostId }) => {
+const ParticipantList = ({ participants, hostId, currentUserId }) => {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-6">
       <h3 className="mb-4 font-bold text-gray-800">참여자 ({participants.length}명)</h3>
@@ -8,6 +8,7 @@ const ParticipantList = ({ participants, hostId }) => {
         ) : (
           participants.map((participant) => {
             const isHost = participant.memberId === hostId;
+            const isCurrentUser = participant.memberId === currentUserId;
             return (
               <div
                 key={participant.participantId}
@@ -23,7 +24,14 @@ const ParticipantList = ({ participants, hostId }) => {
                   {participant.memberName.substring(0, 1)}
                 </div>
                 <div className="flex-1">
-                  <div className="font-medium text-gray-800">{participant.memberName}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-800">{participant.memberName}</span>
+                    {isCurrentUser && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                        나
+                      </span>
+                    )}
+                  </div>
                   <div className={`text-xs ${isHost ? 'text-[#5f0080]' : 'text-gray-500'}`}>
                     {isHost ? '주최자' : '참여자'}
                   </div>
