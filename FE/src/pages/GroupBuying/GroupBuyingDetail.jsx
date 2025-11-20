@@ -225,9 +225,11 @@ const GroupBuyingDetail = () => {
         )}
 
         {/* 참여자 목록 */}
-        <ParticipantList participants={participants} hostId={groupBuying.memberId} />
-
-        {/* 액션 버튼 */}
+          <ParticipantList 
+            participants={participants} 
+            hostId={groupBuying.memberId}
+            currentUserId={currentUser?.id}
+          />        {/* 액션 버튼 */}
         <div className="flex gap-3">
           {isParticipating ? (
             <>
