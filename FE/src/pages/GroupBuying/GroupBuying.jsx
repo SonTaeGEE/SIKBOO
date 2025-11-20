@@ -11,6 +11,7 @@ import { useCurrentUser } from '@/hooks/useUser';
 import { GROUP_BUYING_CATEGORY } from '@/constants/category';
 import GroupBuyingCard from '@/components/GroupBuying/GroupBuyingCard';
 import Loading from '@/components/common/Loading';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const GroupBuying = () => {
   const navigate = useNavigate();
@@ -24,6 +25,10 @@ const GroupBuying = () => {
   const searchQuery = searchParams.get('search') || '';
   const category = searchParams.get('category') || 'all';
   const activeTab = searchParams.get('tab') || 'recruiting';
+  
+  // 검색어 입력 상태와 debounced 검색어 분리
+  const [searchInput, setSearchInput] = useState(searchQuery);
+  const debouncedSearch = useDebounce(searchInput, 500); // 500ms debounce
 
   // QueryString 업데이트 헬퍼 함수
   const updateQueryString = (updates) => {
@@ -40,10 +45,15 @@ const GroupBuying = () => {
     setSearchParams(newParams, { replace: true });
   };
 
-  // 검색어 변경
+  // 검색어 변경 (입력만 업데이트)
   const handleSearchChange = (value) => {
-    updateQueryString({ search: value, category, tab: activeTab });
+    setSearchInput(value);
   };
+  
+  // debounced 검색어가 변경되면 QueryString 업데이트
+  useEffect(() => {
+    updateQueryString({ search: debouncedSearch, category, tab: activeTab });
+  }, [debouncedSearch]);
 
   // 카테고리 변경
   const handleCategoryChange = (newCategory) => {
@@ -215,7 +225,7 @@ const GroupBuying = () => {
             <input
               type="text"
               placeholder="검색어를 입력해주세요"
-              value={searchQuery}
+              value={searchInput}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full rounded-lg border border-[#e0e0e0] bg-white py-3 pr-4 pl-11 text-[#333333] placeholder-[#999999] focus:border-[#5f0080] focus:outline-none"
             />
@@ -313,7 +323,12 @@ const GroupBuying = () => {
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-base font-bold text-[#333333]">
               {activeTab === 'recruiting' ? '모집중인 공동구매' : '내 공동구매'}{' '}
-              <span className="text-[#5f0080]">{currentItems.length}</span>
+              <span className="text-[#5f0080]">
+                {activeTab === 'recruiting' 
+                  ? infiniteRecruitingData?.pages[0]?.totalElements || 0
+                  : infiniteMyData?.pages[0]?.totalElements || 0
+                }
+              </span>
             </h3>
           </div>
 
