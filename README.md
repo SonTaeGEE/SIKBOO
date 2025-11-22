@@ -97,7 +97,7 @@
 ## 산출물
 
 - ### 기능 명세서
-<img width="900" height="800" alt="image" src="https://github.com/user-attachments/assets/510247f2-a3be-47fd-be29-2c16510ab010" />
+<img width="357" height="357" alt="Image" src="https://github.com/user-attachments/assets/83b86af4-86bb-477d-8d5e-a800392e0c98" />
 
 - ### ERD (ERD Cloud)
 <img width="357" height="357" alt="Image" src="https://github.com/user-attachments/assets/22c935ff-b378-4065-a6dd-91c1e902e1a0" />
