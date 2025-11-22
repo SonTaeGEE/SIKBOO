@@ -1,19 +1,48 @@
-version: "3.8"
-
 services:
+  db:
+    image: 'postgis/postgis:18-3.6'
+    container_name: sikboo-postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - '5432:5432'
+    volumes:
+      - sikboo-data:/var/lib/postgresql
+      - ./initdb:/docker-entrypoint-initdb.d
+    networks:
+      - sikboo-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: sikboo-backend
     ports:
-      - "8080:8080"
-    network_mode: host
+      - '8080:8080'
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/sikboo
-      SPRING_DATASOURCE_USERNAME: stg
-      SPRING_DATASOURCE_PASSWORD: 1234
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_JPA_SHOW_SQL: true
-      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: true
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=none
+      - SPRING_JPA_SHOW_SQL=true
+      - SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL=true
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - sikboo-network
     restart: unless-stopped
+
+networks:
+  sikboo-network:
+    driver: bridge
+
+volumes:
+  sikboo-data:
