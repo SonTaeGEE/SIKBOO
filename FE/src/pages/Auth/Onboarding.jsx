@@ -1,15 +1,21 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { submitOnboarding, skipOnboarding } from '@/api/authApi';
-import { analyzeIngredientText, addIngredientsFromAi } from '@/api/ingredientApi';
-import sikbooLogo from '@/assets/sikboo.png';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+
+import sikbooLogo from '@/assets/sikboo.png';
+import { submitOnboarding, skipOnboarding } from '@/api/authApi';
+import { useAnalyzeIngredientText, useAddIngredientsFromAi } from '@/hooks/useIngredient';
+import OnboardingSkipModal from '@/components/Auth/OnboardingSkipModal';
 
 const Onboarding = () => {
   const navigate = useNavigate();
+  const analyzeMutation = useAnalyzeIngredientText();
+  const addFromAiMutation = useAddIngredientsFromAi();
+
   const [step, setStep] = useState(1); // 1: 프로필, 2: 재료
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState('manual'); // 'manual' | 'ai'
+  const [showSkipDialog, setShowSkipDialog] = useState(false);
 
   // 프로필 데이터
   const [diseases, setDiseases] = useState('');
@@ -24,18 +30,21 @@ const Onboarding = () => {
   const [aiText, setAiText] = useState('');
   const [aiResult, setAiResult] = useState(null);
 
-  const handleSkip = async () => {
-    if (!confirm('설문을 건너뛰시겠습니까?\n나중에 마이페이지에서 수정할 수 있습니다.')) return;
+  const handleSkipClick = () => {
+    setShowSkipDialog(true);
+  };
 
+  const handleSkipConfirm = async () => {
     setLoading(true);
     try {
       await skipOnboarding();
-      navigate('/ingredients', { replace: true });
+      navigate('/main', { replace: true });
     } catch (error) {
       console.error('건너뛰기 실패:', error);
       toast.error('오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setLoading(false);
+      setShowSkipDialog(false);
     }
   };
 
@@ -44,31 +53,29 @@ const Onboarding = () => {
   };
 
   // AI 분석 요청
-  const handleAiAnalyze = async () => {
+  const handleAiAnalyze = () => {
     if (!aiText.trim()) {
       toast.error('내용을 입력해주세요.');
       return;
     }
 
-    setLoading(true);
-    try {
-      const result = await analyzeIngredientText(aiText);
+    analyzeMutation.mutate(aiText, {
+      onSuccess: (result) => {
+        // ✅ AI 분석 결과 확인
+        console.log('AI 분석 결과:', result);
+        result.items?.forEach((item, idx) => {
+          console.log(
+            `항목 ${idx + 1} - name: "${item.name}", storage: "${item.storage}", expiryDays: ${item.expiryDays}`,
+          );
+        });
 
-      // ✅ AI 분석 결과 확인
-      console.log('AI 분석 결과:', result);
-      result.items?.forEach((item, idx) => {
-        console.log(
-          `항목 ${idx + 1} - name: "${item.name}", storage: "${item.storage}", expiryDays: ${item.expiryDays}`,
-        );
-      });
-
-      setAiResult(result);
-    } catch (error) {
-      console.error('AI 분석 실패:', error);
-      toast.error('분석에 실패했습니다.');
-    } finally {
-      setLoading(false);
-    }
+        setAiResult(result);
+      },
+      onError: (error) => {
+        console.error('AI 분석 실패:', error);
+        toast.error('분석에 실패했습니다.');
+      },
+    });
   };
 
   // AI 결과 항목 삭제
@@ -141,7 +148,7 @@ const Onboarding = () => {
         console.log('AI 모드 - 정제된 items:', items);
 
         // 1) AI 결과를 먼저 저장 (여기서 expiryDays가 그대로 반영되어 due 계산됨)
-        await addIngredientsFromAi(items);
+        await addFromAiMutation.mutateAsync(items);
 
         // 2) 온보딩 완료만 표시 (ingredients는 비워서 재저장 방지)
         await submitOnboarding({
@@ -322,7 +329,7 @@ const Onboarding = () => {
             {/* 버튼 */}
             <div className="mt-6 flex gap-3">
               <button
-                onClick={handleSkip}
+                onClick={handleSkipClick}
                 disabled={loading}
                 className="flex-1 rounded-lg border border-gray-300 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -477,10 +484,10 @@ const Onboarding = () => {
                   {/* 분석 버튼 */}
                   <button
                     onClick={handleAiAnalyze}
-                    disabled={loading || !aiText.trim()}
+                    disabled={analyzeMutation.isPending || !aiText.trim()}
                     className="mt-3 w-full rounded-lg bg-gradient-to-r from-[#5f0080] to-purple-600 py-3 font-semibold text-white shadow-md transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {loading ? (
+                    {analyzeMutation.isPending ? (
                       <span className="flex items-center justify-center gap-2">
                         <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-white border-r-transparent"></span>
                         AI 분석 중...
@@ -636,7 +643,7 @@ const Onboarding = () => {
                 이전
               </button>
               <button
-                onClick={handleSkip}
+                onClick={handleSkipClick}
                 disabled={loading}
                 className="flex-1 rounded-lg border border-gray-300 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -660,6 +667,13 @@ const Onboarding = () => {
           </div>
         )}
       </div>
+
+      <OnboardingSkipModal
+        showSkipDialog={showSkipDialog}
+        setShowSkipDialog={setShowSkipDialog}
+        handleSkip={handleSkipConfirm}
+        isPending={loading}
+      />
     </div>
   );
 };

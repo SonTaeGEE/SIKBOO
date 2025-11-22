@@ -51,6 +51,7 @@ public class GroupBuyingService {
                 .maxPeople(request.getMaxPeople())
                 .currentPeople(0) 
                 .info(request.getInfo())
+                .link(request.getLink())
                 .pickupLocation(request.getPickupLocation())
                 .pickupLatitude(request.getPickupLatitude())
                 .pickupLongitude(request.getPickupLongitude())
@@ -136,6 +137,7 @@ public class GroupBuyingService {
                 request.getTotalPrice(),
                 request.getMaxPeople(),
                 request.getInfo(),
+                request.getLink(),
                 request.getPickupLocation(),
                 request.getPickupLatitude(),
                 request.getPickupLongitude(),

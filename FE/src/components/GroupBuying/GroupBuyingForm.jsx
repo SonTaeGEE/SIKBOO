@@ -88,9 +88,7 @@ const GroupBuyingForm = ({
       <div>
         <label className="mb-2 block text-sm font-medium text-gray-700">
           수령 장소
-          <span className="ml-1 text-xs font-normal text-gray-500">
-            (현재 위치 기준 3km 이내)
-          </span>
+          <span className="ml-1 text-xs font-normal text-gray-500">(현재 위치 기준 3km 이내)</span>
         </label>
         <button
           type="button"
@@ -121,9 +119,20 @@ const GroupBuyingForm = ({
           onChange={onInputChange}
           className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:ring-2 focus:ring-[#5f0080] focus:outline-none"
         />
-        <p className="mt-1 text-xs text-gray-500">
-          마감 시간 이후에는 새로운 참여가 불가능합니다
-        </p>
+        <p className="mt-1 text-xs text-gray-500">마감 시간 이후에는 새로운 참여가 불가능합니다</p>
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-medium text-gray-700">관련 링크 (선택)</label>
+        <input
+          type="url"
+          name="link"
+          value={formData.link}
+          onChange={onInputChange}
+          placeholder="예: https://example.com/product"
+          className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:ring-2 focus:ring-[#5f0080] focus:outline-none"
+        />
+        <p className="mt-1 text-xs text-gray-500">제품 페이지를 참고할 링크를 추가해주세요</p>
       </div>
 
       <div>

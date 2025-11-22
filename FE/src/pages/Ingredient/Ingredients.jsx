@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import {
-  listIngredients,
-  deleteIngredient,
-  createIngredient,
-  updateIngredient,
-} from '@/api/ingredientApi';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+
+import {
+  useIngredients,
+  useDeleteIngredient,
+  useCreateIngredient,
+  useUpdateIngredient,
+} from '@/hooks/useIngredient';
+import IngredientDeleteModal from '@/components/Ingredient/IngredientDeleteModal';
 
 const LOCATION_TABS = [
   { key: null, label: '전체' },
@@ -53,15 +55,35 @@ const Badge = ({ daysLeft }) => {
 
 export default function Ingredients() {
   const nav = useNavigate();
+
   const [location, setLocation] = useState(null);
   const [q, setQ] = useState('');
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-
   const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalElements, setTotalElements] = useState(0);
   const pageSize = 10;
+
+  // React Query hooks
+  const { data, isLoading } = useIngredients(
+    {
+      location,
+      q: q || null,
+      page: currentPage,
+      size: pageSize,
+    },
+    {
+      onError: (err) => {
+        console.error(err);
+        nav('/login', { replace: true });
+      },
+    },
+  );
+
+  const deleteMutation = useDeleteIngredient();
+  const createMutation = useCreateIngredient();
+  const updateMutation = useUpdateIngredient();
+
+  const items = data?.content || [];
+  const totalPages = data?.totalPages || 0;
+  const totalElements = data?.totalElements || 0;
 
   const [openAdd, setOpenAdd] = useState(false);
   const [form, setForm] = useState({
@@ -80,55 +102,45 @@ export default function Ingredients() {
     memo: '',
   });
 
-  const fetchList = async (page = 0) => {
-    setLoading(true);
-    setCurrentPage(page);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
-    try {
-      const result = await listIngredients({
-        location,
-        q: q || null,
-        page,
-        size: pageSize,
-      });
-
-      setItems(result.content || []);
-      setCurrentPage(result.number ?? page);
-      setTotalPages(result.totalPages || 0);
-      setTotalElements(result.totalElements || 0);
-    } catch (e) {
-      console.error(e);
-      nav('/login', { replace: true });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // location 변경 시 페이지 초기화
   useEffect(() => {
-    fetchList(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setCurrentPage(0);
   }, [location]);
 
-  const handleDelete = async (id, name) => {
-    if (!confirm(`${name} 을(를) 삭제하시겠습니까?`)) return;
-    try {
-      await deleteIngredient(id);
-      fetchList(currentPage);
-      if (selectedItem?.id === id) {
-        setOpenDetail(false);
-        setSelectedItem(null);
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error('삭제 중 오류가 발생했습니다.');
-    }
+  const handleDeleteClick = (id, name) => {
+    setDeleteTarget({ id, name });
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteTarget) return;
+
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        if (selectedItem?.id === deleteTarget.id) {
+          setOpenDetail(false);
+          setSelectedItem(null);
+        }
+        setShowDeleteDialog(false);
+        setDeleteTarget(null);
+      },
+      onError: (e) => {
+        console.error(e);
+        toast.error('삭제 중 오류가 발생했습니다.');
+        setShowDeleteDialog(false);
+        setDeleteTarget(null);
+      },
+    });
   };
 
   const handleAddClick = () => setOpenAdd(true);
 
   const handleFormChange = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const submitAdd = async (e) => {
+  const submitAdd = (e) => {
     e.preventDefault();
     if (!form.ingredientName?.trim()) {
       toast.error('재료 이름을 입력하세요');
@@ -140,15 +152,18 @@ export default function Ingredients() {
       due: form.due || undefined,
       memo: form.memo || undefined,
     };
-    try {
-      await createIngredient(payload);
-      setOpenAdd(false);
-      setForm({ ingredientName: '', location: '냉장고', due: '', memo: '' });
-      fetchList(0);
-    } catch (err) {
-      console.error(err);
-      toast.error('재료 추가 중 오류가 발생했습니다.');
-    }
+
+    createMutation.mutate(payload, {
+      onSuccess: () => {
+        setOpenAdd(false);
+        setForm({ ingredientName: '', location: '냉장고', due: '', memo: '' });
+        setCurrentPage(0);
+      },
+      onError: (err) => {
+        console.error(err);
+        toast.error('재료 추가 중 오류가 발생했습니다.');
+      },
+    });
   };
 
   const openDetailModal = (item) => {
@@ -164,7 +179,7 @@ export default function Ingredients() {
 
   const handleDetailChange = (k) => (e) => setDetailForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const handleUpdate = async (e) => {
+  const handleUpdate = (e) => {
     e.preventDefault();
     if (!selectedItem) return;
     if (!detailForm.ingredientName?.trim()) {
@@ -177,20 +192,25 @@ export default function Ingredients() {
       due: detailForm.due || undefined,
       memo: detailForm.memo || undefined,
     };
-    try {
-      await updateIngredient(selectedItem.id, payload);
-      setOpenDetail(false);
-      setSelectedItem(null);
-      fetchList(currentPage);
-    } catch (err) {
-      console.error(err);
-      toast.error('수정 중 오류가 발생했습니다.');
-    }
+
+    updateMutation.mutate(
+      { id: selectedItem.id, body: payload },
+      {
+        onSuccess: () => {
+          setOpenDetail(false);
+          setSelectedItem(null);
+        },
+        onError: (err) => {
+          console.error(err);
+          toast.error('수정 중 오류가 발생했습니다.');
+        },
+      },
+    );
   };
 
   const handlePageChange = (newPage) => {
     if (newPage < 0 || newPage >= totalPages) return;
-    fetchList(newPage);
+    setCurrentPage(newPage);
   };
 
   return (
@@ -224,7 +244,7 @@ export default function Ingredients() {
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    fetchList(0);
+                    setCurrentPage(0);
                   }
                 }}
                 placeholder="재료 이름 검색"
@@ -232,22 +252,9 @@ export default function Ingredients() {
               />
               {q && (
                 <button
-                  onClick={async () => {
+                  onClick={() => {
                     setQ('');
-                    try {
-                      const result = await listIngredients({
-                        location,
-                        q: null,
-                        page: 0,
-                        size: pageSize,
-                      });
-                      setItems(result.content || []);
-                      setCurrentPage(result.number || 0);
-                      setTotalPages(result.totalPages || 0);
-                      setTotalElements(result.totalElements || 0);
-                    } catch (e) {
-                      console.error(e);
-                    }
+                    setCurrentPage(0);
                   }}
                   className="absolute top-1/2 right-2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   type="button"
@@ -267,7 +274,7 @@ export default function Ingredients() {
               )}
             </div>
             <button
-              onClick={() => fetchList(0)}
+              onClick={() => setCurrentPage(0)}
               className="flex-shrink-0 rounded-full bg-[#5f0080] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#4a0064]"
               type="button"
             >
@@ -285,7 +292,7 @@ export default function Ingredients() {
 
         {/* 리스트 카드 */}
         <div className="rounded-2xl bg-white p-4 shadow-md">
-          {loading ? (
+          {isLoading ? (
             <div className="flex items-center justify-center py-10 text-sm text-slate-500">
               <svg
                 className="mr-2 h-5 w-5 animate-spin text-violet-500"
@@ -339,7 +346,7 @@ export default function Ingredients() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 text-xs text-[#888]">
+                      <div className="items센터 flex gap-2 text-xs text-[#888]">
                         <span>{formatDateIsoToYMD(it.due)} 까지</span>
                         {it.memo && (
                           <div className="inline-flex items-center gap-1">
@@ -366,7 +373,7 @@ export default function Ingredients() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDelete(it.id, it.ingredientName);
+                        handleDeleteClick(it.id, it.ingredientName);
                       }}
                       className="ml-3 rounded-full p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
                       aria-label="삭제"
@@ -574,7 +581,7 @@ export default function Ingredients() {
                 <button
                   type="button"
                   onClick={() => {
-                    handleDelete(selectedItem.id, selectedItem.ingredientName);
+                    handleDeleteClick(selectedItem.id, selectedItem.ingredientName);
                   }}
                   className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
                 >
@@ -603,6 +610,14 @@ export default function Ingredients() {
           </form>
         </div>
       )}
+
+      <IngredientDeleteModal
+        showDeleteDialog={showDeleteDialog}
+        setShowDeleteDialog={setShowDeleteDialog}
+        handleDelete={handleDeleteConfirm}
+        isPending={deleteMutation.isPending}
+        itemName={deleteTarget?.name || ''}
+      />
     </div>
   );
 }

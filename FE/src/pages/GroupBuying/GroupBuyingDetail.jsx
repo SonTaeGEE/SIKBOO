@@ -13,21 +13,27 @@ import {
   useDeleteGroupBuying,
 } from '@/hooks/useGroupBuying';
 import { useCurrentUser } from '@/hooks/useUser';
+import { useGroupBuyingDetailWebSocket } from '@/hooks/useGroupBuyingDetailWebSocket';
 import Loading from '@/components/common/Loading';
 import EmptyState from '@/components/common/EmptyState';
 import ParticipantList from '@/components/GroupBuying/ParticipantList';
 import GroupBuyingDeleteModal from '@/components/GroupBuying/GroupBuyingDeleteModal';
+import GroupBuyingLeaveModal from '@/components/GroupBuying/GroupBuyingLeaveModal';
 
 const GroupBuyingDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
 
   // 사용자 정보
   const { data: currentUser } = useCurrentUser();
 
   // 공동구매 상세 정보
   const { data: groupBuying, isLoading: isLoadingGroupBuying } = useGroupBuying(id);
+
+  // WebSocket 연결로 참여자 실시간 업데이트
+  useGroupBuyingDetailWebSocket(id);
 
   // 참여자 목록
   const { data: participants = [], isLoading: isLoadingParticipants } =
@@ -60,22 +66,27 @@ const GroupBuyingDetail = () => {
     );
   };
 
-  const handleLeave = () => {
+  const handleLeaveClick = () => {
+    if (!currentUser) return;
+    setShowLeaveDialog(true);
+  };
+
+  const handleLeaveConfirm = () => {
     if (!currentUser) return;
 
-    if (confirm('공동구매에서 나가시겠습니까?')) {
-      leaveMutation.mutate(
-        { id, memberId: currentUser.id },
-        {
-          onSuccess: () => {
-            toast.success('공동구매에서 나갔습니다.');
-          },
-          onError: (error) => {
-            toast.error(error.response?.data?.message || '나가기에 실패했습니다.');
-          },
+    leaveMutation.mutate(
+      { id, memberId: currentUser.id },
+      {
+        onSuccess: () => {
+          toast.success('공동구매에서 나갔습니다.');
+          setShowLeaveDialog(false);
         },
-      );
-    }
+        onError: (error) => {
+          toast.error(error.response?.data?.message || '나가기에 실패했습니다.');
+          setShowLeaveDialog(false);
+        },
+      },
+    );
   };
 
   const handleDelete = () => {
@@ -203,20 +214,37 @@ const GroupBuyingDetail = () => {
           </div>
         </div>
 
-        {/* 수령 장소 상세 정보 */}
+        {/* 상세 정보 */}
         {groupBuying.info && (
           <div className="rounded-xl border border-gray-200 bg-white p-6">
             <h3 className="mb-3 font-bold text-gray-800">상세 정보</h3>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span>{groupBuying.info}</span>
+            <div className="text-sm text-gray-600 whitespace-pre-wrap">
+              {groupBuying.info}
             </div>
           </div>
         )}
 
-        {/* 참여자 목록 */}
-        <ParticipantList participants={participants} hostId={groupBuying.memberId} />
+        {/* 관련 링크 */}
+        {groupBuying.link && (
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <h3 className="mb-3 font-bold text-gray-800">관련 링크</h3>
+            <a
+              href={groupBuying.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm text-[#5f0080] hover:underline break-all"
+            >
+              {groupBuying.link}
+            </a>
+          </div>
+        )}
 
-        {/* 액션 버튼 */}
+        {/* 참여자 목록 */}
+          <ParticipantList 
+            participants={participants} 
+            hostId={groupBuying.memberId}
+            currentUserId={currentUser?.id}
+          />        {/* 액션 버튼 */}
         <div className="flex gap-3">
           {isParticipating ? (
             <>
@@ -229,11 +257,11 @@ const GroupBuyingDetail = () => {
               </button>
               {!isHost && (
                 <button
-                  onClick={handleLeave}
+                  onClick={handleLeaveClick}
                   disabled={leaveMutation.isPending}
                   className="rounded-xl border-2 border-gray-300 px-6 py-4 text-lg font-bold text-gray-600 transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {leaveMutation.isPending ? '나가는 중...' : '나가기'}
+                  나가기
                 </button>
               )}
             </>
@@ -256,6 +284,13 @@ const GroupBuyingDetail = () => {
         setShowDeleteDialog={setShowDeleteDialog}
         handleDelete={handleDelete}
         isPending={deleteMutation.isPending}
+      />
+
+      <GroupBuyingLeaveModal
+        showLeaveDialog={showLeaveDialog}
+        setShowLeaveDialog={setShowLeaveDialog}
+        handleLeave={handleLeaveConfirm}
+        isPending={leaveMutation.isPending}
       />
     </div>
   );

@@ -118,6 +118,11 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
 
         // 지도 클릭 이벤트
         window.kakao.maps.event.addListener(kakaoMap, 'click', (mouseEvent) => {
+          // 모바일에서 키보드 닫기
+          if (document.activeElement) {
+            document.activeElement.blur();
+          }
+
           const clickedPosition = mouseEvent.latLng;
           const clickedLat = clickedPosition.getLat();
           const clickedLng = clickedPosition.getLng();
@@ -135,6 +140,20 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
 
           // 주소 정보 가져오기
           getAddressFromCoords(clickedLat, clickedLng);
+        });
+
+        // 지도 드래그 시작 시 키보드 닫기
+        window.kakao.maps.event.addListener(kakaoMap, 'dragstart', () => {
+          if (document.activeElement) {
+            document.activeElement.blur();
+          }
+        });
+
+        // 줌 변경 시 키보드 닫기
+        window.kakao.maps.event.addListener(kakaoMap, 'zoom_changed', () => {
+          if (document.activeElement) {
+            document.activeElement.blur();
+          }
         });
       } catch (error) {
         console.error('지도 초기화 실패:', error);
@@ -260,6 +279,11 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
 
   // 검색 결과 선택
   const handleSelectSearchResult = (place) => {
+    // 키보드 닫기
+    if (document.activeElement) {
+      document.activeElement.blur();
+    }
+
     const lat = parseFloat(place.y);
     const lng = parseFloat(place.x);
 
@@ -281,6 +305,11 @@ const LocationPickerModal = ({ isOpen, onClose, onSelectLocation, initialLocatio
   // 현재 위치로 이동
   const moveToCurrentLocation = () => {
     if (!currentPosition || !map) return;
+
+    // 키보드 닫기
+    if (document.activeElement) {
+      document.activeElement.blur();
+    }
 
     const moveLatLng = new window.kakao.maps.LatLng(currentPosition.lat, currentPosition.lng);
     map.setCenter(moveLatLng);

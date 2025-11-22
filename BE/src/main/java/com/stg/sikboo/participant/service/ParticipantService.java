@@ -6,11 +6,13 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.stg.sikboo.groupbuying.domain.GroupBuying;
 import com.stg.sikboo.groupbuying.domain.repository.GroupBuyingRepository;
+import com.stg.sikboo.groupbuying.dto.GroupBuyingUpdateMessage;
 import com.stg.sikboo.groupbuying.dto.response.GroupBuyingPageResponse;
 import com.stg.sikboo.groupbuying.dto.response.GroupBuyingResponse;
 import com.stg.sikboo.member.domain.Member;
@@ -31,6 +33,7 @@ public class ParticipantService {
     private final ParticipantRepository participantRepository;
     private final GroupBuyingRepository groupBuyingRepository;
     private final MemberRepository memberRepository;
+    private final SimpMessagingTemplate messagingTemplate;
     
     /**
      * 공동구매 참여
@@ -61,12 +64,19 @@ public class ParticipantService {
                 .groupBuying(groupBuying)
                 .member(member)
                 .build();
-        
+
+        // 먼저 participant를 DB에 저장 (ID 생성)
         Participant saved = participantRepository.save(participant);
+
+        // GroupBuying이 저장된 participant를 리스트에 추가하고 상태 관리
+        groupBuying.addParticipant(saved);
+
+        // GroupBuying의 변경사항을 DB에 반영
+        groupBuyingRepository.save(groupBuying);
         
-        // 6. participants 리스트에 추가하여 자동 동기화 트리거
-        groupBuying.getParticipants().add(saved);
-        groupBuyingRepository.flush();
+        // 7. WebSocket으로 특정 공동구매 방에 참여자 추가 알림
+        sendParticipantUpdate(groupBuying.getGroupBuyingId(), "PARTICIPANT_JOINED", 
+                groupBuying.getCurrentPeople(), groupBuying.getStatus().name(), request.getMemberId());
         
         return ParticipantResponse.from(saved);
     }
@@ -87,13 +97,19 @@ public class ParticipantService {
         if (groupBuying.getMember().getId().equals(memberId)) {
             throw new IllegalStateException("주최자는 공동구매에서 나갈 수 없습니다.");
         }
-        
-        // 4. participants 리스트에서 제거하여 자동 동기화 트리거
-        groupBuying.getParticipants().remove(participant);
-        
-        // 5. 참여 삭제
+
+        // GroupBuying이 participant 제거하고 상태 관리
+        groupBuying.removeParticipant(participant);
+
+        // DB에서 participant 삭제
         participantRepository.delete(participant);
-        groupBuyingRepository.flush();
+
+        // GroupBuying 변경사항 저장
+        groupBuyingRepository.save(groupBuying);
+        
+        // 6. WebSocket으로 특정 공동구매 방에 참여자 나가기 알림
+        sendParticipantUpdate(groupBuying.getGroupBuyingId(), "PARTICIPANT_LEFT", 
+                groupBuying.getCurrentPeople(), groupBuying.getStatus().name(), memberId);
     }
     
     /**
@@ -166,5 +182,21 @@ public class ParticipantService {
                 .last(result.isLast())
                 .hasNext(result.hasNext())
                 .build();
+    }
+    
+    /**
+     * WebSocket으로 특정 공동구매 방에 참여자 업데이트 전송
+     */
+    private void sendParticipantUpdate(Long groupBuyingId, String updateType, Integer currentPeople, String status, Long memberId) {
+        GroupBuyingUpdateMessage message = GroupBuyingUpdateMessage.builder()
+                .groupBuyingId(groupBuyingId)
+                .updateType(updateType)
+                .currentPeople(currentPeople)
+                .status(status)
+                .memberId(memberId)
+                .build();
+        
+        // 특정 공동구매 방으로만 전송
+        messagingTemplate.convertAndSend("/topic/groupbuying/" + groupBuyingId + "/participants", message);
     }
 }

@@ -51,4 +51,6 @@ public class GroupBuyingCreateRequest {
     private LocalDateTime deadline;
     
     private String info;
+    
+    private String link;
 }

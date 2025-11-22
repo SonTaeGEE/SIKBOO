@@ -63,6 +63,9 @@ public class GroupBuying {
     
     @Column(name = "info", nullable = true)
     private String info;
+    
+    @Column(name = "link", columnDefinition = "TEXT")
+    private String link;
 
     // currentPeople은 DB 컬럼이지만, participants 리스트의 크기로 자동 계산
     @Column(name = "current_people", nullable = false)
@@ -132,7 +135,18 @@ public class GroupBuying {
         RECRUITING, DEADLINE
     }
 
+
     // 비즈니스 로직 메서드
+    public void addParticipant(Participant participant){
+        this.participants.add(participant);
+        this.increaseCurrentPeople();
+    }
+
+    public void removeParticipant(Participant participant){
+        this.participants.remove(participant);
+        this.decreaseCurrentPeople();
+    }
+
     public void increaseCurrentPeople() {
         this.currentPeople++;
         if (this.currentPeople >= this.maxPeople) {
@@ -176,6 +190,7 @@ public class GroupBuying {
             Integer totalPrice,
             Integer maxPeople,
             String info,
+            String link,
             String pickupLocation,
             BigDecimal pickupLatitude,
             BigDecimal pickupLongitude,
@@ -193,6 +208,7 @@ public class GroupBuying {
         this.totalPrice = totalPrice;
         this.maxPeople = maxPeople;
         this.info = info;
+        this.link = link;
         this.pickupLocation = pickupLocation;
         this.pickupLatitude = pickupLatitude;
         this.pickupLongitude = pickupLongitude;
