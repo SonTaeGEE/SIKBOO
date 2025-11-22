@@ -64,12 +64,15 @@ public class ParticipantService {
                 .groupBuying(groupBuying)
                 .member(member)
                 .build();
-        
+
+        // 먼저 participant를 DB에 저장 (ID 생성)
         Participant saved = participantRepository.save(participant);
-        
-        // 6. participants 리스트에 추가하여 자동 동기화 트리거
-        groupBuying.getParticipants().add(saved);
-        groupBuyingRepository.flush();
+
+        // GroupBuying이 저장된 participant를 리스트에 추가하고 상태 관리
+        groupBuying.addParticipant(saved);
+
+        // GroupBuying의 변경사항을 DB에 반영
+        groupBuyingRepository.save(groupBuying);
         
         // 7. WebSocket으로 특정 공동구매 방에 참여자 추가 알림
         sendParticipantUpdate(groupBuying.getGroupBuyingId(), "PARTICIPANT_JOINED", 
@@ -94,13 +97,15 @@ public class ParticipantService {
         if (groupBuying.getMember().getId().equals(memberId)) {
             throw new IllegalStateException("주최자는 공동구매에서 나갈 수 없습니다.");
         }
-        
-        // 4. participants 리스트에서 제거하여 자동 동기화 트리거
-        groupBuying.getParticipants().remove(participant);
-        
-        // 5. 참여 삭제
+
+        // GroupBuying이 participant 제거하고 상태 관리
+        groupBuying.removeParticipant(participant);
+
+        // DB에서 participant 삭제
         participantRepository.delete(participant);
-        groupBuyingRepository.flush();
+
+        // GroupBuying 변경사항 저장
+        groupBuyingRepository.save(groupBuying);
         
         // 6. WebSocket으로 특정 공동구매 방에 참여자 나가기 알림
         sendParticipantUpdate(groupBuying.getGroupBuyingId(), "PARTICIPANT_LEFT", 
