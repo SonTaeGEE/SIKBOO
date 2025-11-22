@@ -214,13 +214,28 @@ const GroupBuyingDetail = () => {
           </div>
         </div>
 
-        {/* 수령 장소 상세 정보 */}
+        {/* 상세 정보 */}
         {groupBuying.info && (
           <div className="rounded-xl border border-gray-200 bg-white p-6">
             <h3 className="mb-3 font-bold text-gray-800">상세 정보</h3>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span>{groupBuying.info}</span>
+            <div className="text-sm text-gray-600 whitespace-pre-wrap">
+              {groupBuying.info}
             </div>
+          </div>
+        )}
+
+        {/* 관련 링크 */}
+        {groupBuying.link && (
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <h3 className="mb-3 font-bold text-gray-800">관련 링크</h3>
+            <a
+              href={groupBuying.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm text-[#5f0080] hover:underline break-all"
+            >
+              {groupBuying.link}
+            </a>
           </div>
         )}
 

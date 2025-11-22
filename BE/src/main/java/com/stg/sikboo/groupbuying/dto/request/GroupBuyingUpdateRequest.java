@@ -30,6 +30,8 @@ public class GroupBuyingUpdateRequest {
     
     private String info;
     
+    private String link;
+    
     private String pickupLocation;
     
     private BigDecimal pickupLatitude;
