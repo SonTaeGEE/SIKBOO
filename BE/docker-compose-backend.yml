@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sikboo-backend
+    ports:
+      - "8080:8080"
+    network_mode: host
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/sikboo
+      SPRING_DATASOURCE_USERNAME: stg
+      SPRING_DATASOURCE_PASSWORD: 1234
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: true
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: true
+    restart: unless-stopped
