@@ -15,10 +15,6 @@
   - 공동구매 기능
 
 - __개발 기간__ : 2025.10.28 ~ 2025.11.26
-
-- __프로젝트 블로그__ : [노션_식재료를 부탁해 (sikboo)]([https://www.notion.so/27e83a6b63ea8184a6f2d8f6736c70fc](https://linen-income-d05.notion.site/KOSA-29a481928e56807d85a0cbfee786d575))
-
-- __발표 자료__ : [Canva_프로젝트 발표 PPT]([https://www.canva.com/design/DAG2AZm1Wf8/qkdjCvpt0zCNJfKCsDMZEw/edit?utm_content=DAG2AZm1Wf8&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton](https://www.canva.com/design/DAG47OSZ-No/5F-3wAr1qfOxFVyEuM298g/edit?utm_content=DAG47OSZ-No&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton))
 <br>
 
 
