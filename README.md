@@ -57,40 +57,47 @@
 
 **[ 로그인 ]**
 
-<img width="600" alt="login" src="https://github.com/user-attachments/assets/e86c9ae1-b16b-4b90-8dd7-ebb8bc167d7a" />
+<img width="293" height="655" alt="Image" src="https://github.com/user-attachments/assets/eb402504-60b7-4bb2-919a-7afa28ecde7f" />
 <br>
 
 - 로그인
 <br>
 
 
-**[ 회원가입 ]**
+**[ 내 재료 ]**
 
-<img width="600" alt="signup" src="https://github.com/user-attachments/assets/af34f278-3a9c-4d81-b8cf-143f9060bffd" />
+<img width="296" height="654" alt="Image" src="https://github.com/user-attachments/assets/a789473b-1dd0-476d-a4b5-48560274c464" />
 <br>
 
-- 회원가입
-<br>
-
-
-**[ 새 문제 생성 창 ]**
-
-<img width="600" alt="newquiz" src="https://github.com/user-attachments/assets/36d96143-f802-4bfe-9e4e-dd35da019c7b" />
-<br>
-
-- <설명>
-- <설명>
+- 내 재료 추가 및 삭제 및 목록 표시
 <br>
 
 
-**[ 새 문제 생성 창 2 ]**
+**[ 레시피 ]**
 
-<img width="304" height="429" alt="image" src="https://github.com/user-attachments/assets/07be91a5-7c28-498e-ac89-e337f941ecdd" />
+<img width="295" height="659" alt="Image" src="https://github.com/user-attachments/assets/7e8355d4-17a6-446b-8bbc-c1c9c9604b0d" />
 <br>
 
-- <설명>
-- <설명>
+- 레시피 생성 및 목록 및 상세 레시피 표시
 <br>
+
+
+**[ 공동구매 ]**
+
+<img width="292" height="657" alt="Image" src="https://github.com/user-attachments/assets/79d92c20-1836-47f2-936a-028d676faa05" />
+<br>
+
+- 모집방, 참여하기, 실시간 채팅
+<br>
+
+**[ 메인페이지 ]**
+
+<img width="292" height="654" alt="Image" src="https://github.com/user-attachments/assets/a3516418-db2d-4636-b4f9-b28a743466f3" />
+<br>
+
+- 메인페이지(내재료, 레시피, 공동구매 한 눈에 확인)
+<br>
+
 
 <!-- --------------------------------------------------------------------------------------------------------------- -->
 <!--산출물-->
