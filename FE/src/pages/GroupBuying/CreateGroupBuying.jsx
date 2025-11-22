@@ -20,6 +20,7 @@ const CreateGroupBuying = () => {
     maxParticipants: '',
     deadline: '',
     description: '',
+    link: '',
   });
   // 로그인한 사용자 ID 가져오기
   const { data: currentUser } = useCurrentUser();
@@ -113,6 +114,7 @@ const CreateGroupBuying = () => {
       totalPrice: totalPriceNumber,
       maxPeople: maxParticipantsNumber,
       info: formData.description,
+      link: formData.link,
       pickupLocation: selectedLocation.address,
       pickupLatitude: selectedLocation.lat,
       pickupLongitude: selectedLocation.lng,

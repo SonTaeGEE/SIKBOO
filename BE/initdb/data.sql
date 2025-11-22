@@ -131,6 +131,7 @@ CREATE TABLE groupbuying (
     total_price INTEGER NOT NULL,
     max_people INTEGER NOT NULL,
     info TEXT,
+    link TEXT,
     current_people INTEGER NOT NULL DEFAULT 1,
     pickup_location VARCHAR(255) NOT NULL,
     pickup_latitude  NUMERIC(10, 8) NOT NULL,
