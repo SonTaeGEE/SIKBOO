@@ -1,4 +1,4 @@
-<img width="200" height="200" alt="logo" src="https://github.com/user-attachments/assets/e0b2a2ab-72ab-44c0-a4e9-0330420f0c4c" />
+<img width="200" height="200" alt="Image" src="https://github.com/user-attachments/assets/89e860b0-8dcb-4a59-a9f4-5181ab9f21d4" />
 
 # 식재료를 부탁해 프로젝트
 - __프로젝트 명__ : 식재료를 부탁해 (sikboo)
@@ -24,15 +24,11 @@
 ## Team "손태지"
 &nbsp;&nbsp;&nbsp;&nbsp;KOSA_4차 프로젝트 팀 손태지
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 사용자가 학습을 희망하는 부분에 대한 맞춤 코딩테스트 문제를 알라딘의 지니처럼 제공하고자 하는 소망을 담음
-<br>
-<br>
-
 &nbsp;&nbsp;&nbsp;&nbsp;__[ 팀원 소개 ]__
 
 |<img src="https://avatars.githubusercontent.com/u/97112125?v=4" width="150" height="150"/>|<img src="https://avatars.githubusercontent.com/u/104715028?v=4" width="150" height="150"/>|<img src="https://avatars.githubusercontent.com/u/172017988?v=4" width="150" height="150"/>|
 |:-:|:-:|:-:|
-|Kiseong Kim<br/>[@kks1177](https://github.com/kks1177)|ycson<br/>[@syc2618](https://github.com/syc2618)|wldnjs<br/>[@wldnjs9397](https://github.com/wldnjs9397)|
+|나규태<br/>[@ncb6206](https://github.com/ncb6206)|손윤찬<br/>[@syc2618](https://github.com/syc2618)|한지원<br/>[@wldnjs9397](https://github.com/wldnjs9397)|
 <br>
 
 
@@ -96,39 +92,18 @@
 - <설명>
 <br>
 
-
-
-
-
-<!-- --------------------------------------------------------------------------------------------------------------- -->
-<!--컨벤션-->
-## 컨벤션
-
-- ### 코딩 컨벤션
-<img width="700" height="800" alt="image" src="https://github.com/user-attachments/assets/e6e07969-0fc0-43b0-afdf-570adf8ea05f" />
-
-- ### 깃 컨벤션
-<img width="700" height="800" alt="image" src="https://github.com/user-attachments/assets/6ff2652c-45ac-44d4-89f6-8f6b603aa35b" />
-<br>
-<br>
-
-
-
 <!-- --------------------------------------------------------------------------------------------------------------- -->
 <!--산출물-->
 ## 산출물
 
-- ### Notion ([코드지니_알라딘 노션 바로가기](https://www.notion.so/27e83a6b63ea8184a6f2d8f6736c70fc?source=copy_link))
-<img width="900" height="900" alt="image" src="https://github.com/user-attachments/assets/341afbec-a2f3-445d-bd9c-9907422a1cad" />
-
 - ### 기능 명세서
 <img width="900" height="800" alt="image" src="https://github.com/user-attachments/assets/510247f2-a3be-47fd-be29-2c16510ab010" />
 
-- ### 시스템 아키텍처
-<img width="900" height="600" alt="image" src="https://github.com/user-attachments/assets/ff836c56-f9a5-4045-92bf-95879eea0b8b" />
+- ### ERD (ERD Cloud)
+<img width="357" height="357" alt="Image" src="https://github.com/user-attachments/assets/22c935ff-b378-4065-a6dd-91c1e902e1a0" />
 
 - ### Wireframe (Figma)
-<img width="900" height="600" alt="image" src="https://github.com/user-attachments/assets/3aef1169-e575-4a62-be8a-13379b1e5e44" />
+<img width="357" height="357" alt="Image" src="https://github.com/user-attachments/assets/52ac9847-a4f1-473e-a735-82986b2bc917" />
 
-- ### ERD (ERD Cloud)
-<img width="900" height="600" alt="image" src="https://github.com/user-attachments/assets/c1ab6194-4480-4114-a182-72f09f646cbf" />
+- ### 배포 (식재료를 부탁해)
+<img width="357" height="357" alt="Image" src="https://github.com/user-attachments/assets/f0d7683d-3626-4bc8-be63-629959a2af4f" />
