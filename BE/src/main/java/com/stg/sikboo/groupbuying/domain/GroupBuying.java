@@ -148,7 +148,6 @@ public class GroupBuying {
     }
 
     public void increaseCurrentPeople() {
-        this.currentPeople++;
         if (this.currentPeople >= this.maxPeople) {
             this.status = Status.DEADLINE;
         }
@@ -156,7 +155,6 @@ public class GroupBuying {
 
     public void decreaseCurrentPeople() {
         if (this.currentPeople > 1) {
-            this.currentPeople--;
             if (this.status == Status.DEADLINE) {
                 this.status = Status.RECRUITING;
             }
